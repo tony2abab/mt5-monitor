@@ -1,0 +1,144 @@
+================================================================================
+                    完整整合 - 只需複製貼上 6 個位置
+================================================================================
+
+您的原始文件已經很乾淨，只需要在以下位置添加代碼：
+
+================================================================================
+【位置 1】在第 35 行後面添加（input double 每手成本超過多少通知 = -20; 之後）
+================================================================================
+
+// ==================== 網頁監控參數 ====================
+input  string  __________網頁監控系統__________ = "=====網頁監控參數=====";
+input  string  Monitor_API_URL = "http://192.168.31.206:8080/api";
+input  string  Monitor_API_KEY = "secret_key_2025_9093942525abcdxyz_";
+input  string  Monitor_NodeID = "A1_VPS0";
+input  int  Monitor_HeartbeatMinutes = 15;
+input  bool  Monitor_AutoSend = true;
+input  bool  Monitor_OnlyHeartbeat = false;  // 只發送心跳，不發送統計數據
+
+
+================================================================================
+【位置 2】在第 376 行後面添加（double A總息 = 0; 之後）
+================================================================================
+
+// ==================== 網頁監控全域變數 ====================
+datetime g_lastMonitorHeartbeat = 0;
+bool g_dataSentToday = false;
+
+
+================================================================================
+【位置 3】在第 411 行後面添加（最後一個函數結尾 } 之後）
+================================================================================
+
+//+------------------------------------------------------------------+
+//| 網頁監控 - 發送心跳                                               |
+//+------------------------------------------------------------------+
+void SendMonitorHeartbeat() {
+   string url = Monitor_API_URL + "/heartbeat";
+   string headers = "Content-Type: application/json\r\nAuthorization: Bearer " + Monitor_API_KEY + "\r\n";
+   string broker = AccountInfoString(ACCOUNT_COMPANY);
+   string account = IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
+   string payload = "{\"id\":\"" + Monitor_NodeID + "\",\"name\":\"" + 檔案頭ID + " " + 備註_VPS位置 + "\",\"broker\":\"" + broker + "\",\"account\":\"" + account + "\"}";
+   char post_data[], result[];
+   string result_headers;
+   StringToCharArray(payload, post_data, 0, StringLen(payload));
+   ResetLastError();
+   int res = WebRequest("POST", url, headers, 5000, post_data, result, result_headers);
+   if(res == 200 || res == 201) {
+      g_lastMonitorHeartbeat = TimeCurrent();
+      Print("✓ 網頁監控心跳成功");
+   } else {
+      int error_code = GetLastError();
+      Print("✗ 監控心跳失敗 HTTP:", res, " Error:", error_code);
+      if(error_code == 4014) Print("  請將網址加入白名單: ", Monitor_API_URL);
+   }
+}
+
+//+------------------------------------------------------------------+
+//| 網頁監控 - 發送 A/B 統計                                          |
+//+------------------------------------------------------------------+
+void SendMonitorABStats() {
+   if(!Monitor_AutoSend) return;
+   string url = Monitor_API_URL + "/ab-stats";
+   string headers = "Content-Type: application/json\r\nAuthorization: Bearer " + Monitor_API_KEY + "\r\n";
+   double lots_diff = A手數總數 - B手數總數;
+   double a_profit_usd = A盈利總數 / 匯率變數;
+   double ab_total = a_profit_usd + B盈利總數;
+   double cost_per_lot = (A手數總數 > 0) ? (ab_total / A手數總數) : 0;
+   MqlDateTime tm;
+   TimeToStruct(TimeCurrent(), tm);
+   string today_date = StringFormat("%04d-%02d-%02d", tm.year, tm.mon, tm.day);
+   string payload = "{\"id\":\"" + Monitor_NodeID + "\",\"date\":\"" + today_date + "\",";
+   payload += "\"a_lots_total\":" + DoubleToString(A手數總數, 2) + ",";
+   payload += "\"b_lots_total\":" + DoubleToString(B手數總數, 2) + ",";
+   payload += "\"lots_diff\":" + DoubleToString(lots_diff, 2) + ",";
+   payload += "\"a_profit_total\":" + DoubleToString(a_profit_usd, 2) + ",";
+   payload += "\"b_profit_total\":" + DoubleToString(B盈利總數, 2) + ",";
+   payload += "\"ab_profit_total\":" + DoubleToString(ab_total, 2) + ",";
+   payload += "\"a_interest_total\":" + DoubleToString(A總息, 2) + ",";
+   payload += "\"cost_per_lot\":" + DoubleToString(cost_per_lot, 2) + "}";
+   char post_data[], result[];
+   string result_headers;
+   StringToCharArray(payload, post_data, 0, StringLen(payload));
+   ResetLastError();
+   int res = WebRequest("POST", url, headers, 5000, post_data, result, result_headers);
+   if(res == 200 || res == 201) {
+      g_dataSentToday = true;
+      Print("✓ A/B統計發送成功");
+      Print("  A手數:", A手數總數, " B手數:", B手數總數);
+      Print("  AB總盈利:", ab_total, " 每手成本:", cost_per_lot);
+   } else {
+      Print("✗ 統計發送失敗 HTTP:", res, " Error:", GetLastError());
+   }
+}
+
+
+================================================================================
+【位置 4】在 OnInit() 的 return 之前添加（S4_分加一 = ... 之後）
+================================================================================
+
+  // 初始化網頁監控
+  SendMonitorHeartbeat();
+  Print("========================================== 網頁監控已啟用 NodeID: ", Monitor_NodeID, " ==========================================");
+
+
+================================================================================
+【位置 5】在 OnTick() 開頭添加（void OnTick() { 之後的第一行）
+================================================================================
+
+    // === 網頁監控：心跳檢查 ===
+    if(TimeCurrent() - g_lastMonitorHeartbeat >= Monitor_HeartbeatMinutes * 60) SendMonitorHeartbeat();
+    
+    // === 網頁監控：新的一天重置 ===
+    static int monitor_last_day = 0;
+    int monitor_current_day = get_time_info_day(TimeCurrent());
+    if(monitor_current_day != monitor_last_day) {
+       g_dataSentToday = false;
+       monitor_last_day = monitor_current_day;
+    }
+
+
+================================================================================
+【位置 6】在 OnTick() 最後，「開始 = 0;」之前添加
+================================================================================
+
+      // === 網頁監控：發送統計數據 ===
+      if(Monitor_AutoSend && !Monitor_OnlyHeartbeat && !g_dataSentToday && A手數總數 > 0) {
+         SendMonitorABStats();
+      }
+
+
+================================================================================
+完成！按 F7 編譯測試
+================================================================================
+
+行號參考（根據您貼的代碼）：
+- 位置 1：第 35 行附近
+- 位置 2：第 376 行附近
+- 位置 3：第 411 行附近（get_history_property_double_by_deal_ticket 函數結尾後）
+- 位置 4：OnInit() 函數內，return 之前
+- 位置 5：OnTick() 函數開頭第一行
+- 位置 6：OnTick() 函數末尾，「開始 = 0;」之前
+
+================================================================================

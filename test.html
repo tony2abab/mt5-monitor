@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MT5 監控測試</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #1a1a2e;
+            color: #fff;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .card {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .title {
+            font-size: 24px;
+            color: #00d4ff;
+            margin-bottom: 20px;
+        }
+        .data {
+            background: #0f3460;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        .status-online {
+            color: #00ff88;
+        }
+        .status-offline {
+            color: #ff4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">🚀 MT5 監控系統測試頁面</h1>
+        
+        <div class="card">
+            <h2>📡 連線狀態</h2>
+            <div id="status">正在載入...</div>
+        </div>
+        
+        <div class="card">
+            <h2>📊 節點數據</h2>
+            <div id="nodes">正在載入...</div>
+        </div>
+        
+        <div class="card">
+            <h2>🔧 除錯信息</h2>
+            <div id="debug" class="data"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://192.168.31.206:8080/api';
+        const debugDiv = document.getElementById('debug');
+        
+        function addDebug(msg) {
+            debugDiv.innerHTML += msg + '<br>';
+            console.log(msg);
+        }
+        
+        addDebug('開始測試...');
+        addDebug('API URL: ' + API_URL);
+        
+        // Test API connection
+        fetch(API_URL + '/nodes')
+            .then(response => {
+                addDebug('HTTP狀態: ' + response.status);
+                return response.json();
+            })
+            .then(data => {
+                addDebug('收到數據: ' + JSON.stringify(data, null, 2).substring(0, 200) + '...');
+                
+                document.getElementById('status').innerHTML = 
+                    `<span class="status-online">✅ API 連線正常</span>`;
+                
+                let html = '';
+                data.nodes.forEach(node => {
+                    const statusClass = node.status === 'online' ? 'status-online' : 'status-offline';
+                    html += `
+                        <div class="data">
+                            <h3>${node.name} <span class="${statusClass}">${node.status}</span></h3>
+                            <p>ID: ${node.id}</p>
+                            <p>帳號: ${node.account}</p>
+                            ${node.todayABStats ? `
+                                <p><strong>A/B 統計:</strong></p>
+                                <p>A手數: ${node.todayABStats.a_lots_total}</p>
+                                <p>B手數: ${node.todayABStats.b_lots_total}</p>
+                                <p>AB總盈利: $${node.todayABStats.ab_profit_total}</p>
+                                <p>每手成本: $${node.todayABStats.cost_per_lot}</p>
+                            ` : '<p>無 A/B 統計數據</p>'}
+                        </div>
+                    `;
+                });
+                
+                document.getElementById('nodes').innerHTML = html;
+                addDebug('✅ 數據顯示成功！');
+            })
+            .catch(error => {
+                addDebug('❌ 錯誤: ' + error);
+                document.getElementById('status').innerHTML = 
+                    `<span class="status-offline">❌ API 連線失敗: ${error}</span>`;
+                document.getElementById('nodes').innerHTML = 
+                    `<p class="status-offline">無法載入節點數據</p>`;
+            });
+    </script>
+</body>
+</html>

@@ -1,0 +1,245 @@
+================================================================================
+完整整合補丁 - 請按照以下步驟修改您的原始 EA
+================================================================================
+
+【步驟 1】在 EA 開頭添加（第 16 行之後，#property strict 之後）
+================================================================================
+
+// ==================== 網頁監控參數 ====================
+input  string  __________網頁監控系統__________ = "=====網頁監控參數=====";
+input  string  Monitor_API_URL = "http://192.168.31.206:8080/api";
+input  string  Monitor_API_KEY = "secret_key_2025_9093942525abcdxyz_";
+input  string  Monitor_NodeID = "A1_VPS0";
+input  int  Monitor_HeartbeatMinutes = 15;
+input  bool  Monitor_AutoSend = true;
+
+
+【步驟 2】在全域變數區添加（在 double A總息 = 0; 之後）
+================================================================================
+
+// ==================== 網頁監控全域變數 ====================
+datetime g_lastMonitorHeartbeat = 0;
+bool g_dataSentToday = false;
+
+
+【步驟 3】在所有輔助函數之後添加這兩個函數（在 OnInit() 之前）
+================================================================================
+
+//+------------------------------------------------------------------+
+//| 網頁監控 - 發送心跳                                               |
+//+------------------------------------------------------------------+
+void SendMonitorHeartbeat() {
+   string url = Monitor_API_URL + "/heartbeat";
+   string headers = "Content-Type: application/json\r\nAuthorization: Bearer " + Monitor_API_KEY + "\r\n";
+   
+   string broker = AccountInfoString(ACCOUNT_COMPANY);
+   string account = IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
+   
+   string payload = "{";
+   payload += "\"id\":\"" + Monitor_NodeID + "\",";
+   payload += "\"name\":\"" + 檔案頭ID + " " + 備註_VPS位置 + "\",";
+   payload += "\"broker\":\"" + broker + "\",";
+   payload += "\"account\":\"" + account + "\"";
+   payload += "}";
+   
+   char post_data[];
+   char result[];
+   string result_headers;
+   
+   StringToCharArray(payload, post_data, 0, StringLen(payload));
+   ResetLastError();
+   
+   int res = WebRequest("POST", url, headers, 5000, post_data, result, result_headers);
+   
+   if(res == 200 || res == 201) {
+      g_lastMonitorHeartbeat = TimeCurrent();
+      Print("✓ 網頁監控心跳成功");
+   } else {
+      int error_code = GetLastError();
+      Print("✗ 監控心跳失敗 HTTP:", res, " Error:", error_code);
+      if(error_code == 4014) {
+         Print("  請將網址加入白名單: ", Monitor_API_URL);
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| 網頁監控 - 發送 A/B 統計                                          |
+//+------------------------------------------------------------------+
+void SendMonitorABStats() {
+   if(!Monitor_AutoSend) return;
+   
+   string url = Monitor_API_URL + "/ab-stats";
+   string headers = "Content-Type: application/json\r\nAuthorization: Bearer " + Monitor_API_KEY + "\r\n";
+   
+   double lots_diff = A手數總數 - B手數總數;
+   double a_profit_usd = A盈利總數 / 匯率變數;
+   double ab_total = a_profit_usd + B盈利總數;
+   double cost_per_lot = (A手數總數 > 0) ? (ab_total / A手數總數) : 0;
+   
+   MqlDateTime tm;
+   TimeToStruct(TimeCurrent(), tm);
+   string today_date = StringFormat("%04d-%02d-%02d", tm.year, tm.mon, tm.day);
+   
+   string payload = "{";
+   payload += "\"id\":\"" + Monitor_NodeID + "\",";
+   payload += "\"date\":\"" + today_date + "\",";
+   payload += "\"a_lots_total\":" + DoubleToString(A手數總數, 2) + ",";
+   payload += "\"b_lots_total\":" + DoubleToString(B手數總數, 2) + ",";
+   payload += "\"lots_diff\":" + DoubleToString(lots_diff, 2) + ",";
+   payload += "\"a_profit_total\":" + DoubleToString(a_profit_usd, 2) + ",";
+   payload += "\"b_profit_total\":" + DoubleToString(B盈利總數, 2) + ",";
+   payload += "\"ab_profit_total\":" + DoubleToString(ab_total, 2) + ",";
+   payload += "\"a_interest_total\":" + DoubleToString(A總息, 2) + ",";
+   payload += "\"cost_per_lot\":" + DoubleToString(cost_per_lot, 2);
+   payload += "}";
+   
+   char post_data[];
+   char result[];
+   string result_headers;
+   
+   StringToCharArray(payload, post_data, 0, StringLen(payload));
+   ResetLastError();
+   
+   int res = WebRequest("POST", url, headers, 5000, post_data, result, result_headers);
+   
+   if(res == 200 || res == 201) {
+      g_dataSentToday = true;
+      Print("✓ A/B統計發送成功");
+      Print("  A手數:", A手數總數, " B手數:", B手數總數);
+      Print("  AB總盈利:", ab_total, " 每手成本:", cost_per_lot);
+   } else {
+      Print("✗ 統計發送失敗 HTTP:", res, " Error:", GetLastError());
+   }
+}
+
+
+【步驟 4】在 OnInit() 函數末尾添加（S4_分加一 = Step4_IC分_0to58 + 1; 之後，return 之前）
+================================================================================
+
+   // 初始化網頁監控
+   SendMonitorHeartbeat();
+   Print("==========================================");
+   Print("網頁監控已啟用");
+   Print("NodeID: ", Monitor_NodeID);
+   Print("請確認已將網址加入白名單: ", Monitor_API_URL);
+   Print("==========================================");
+
+
+【步驟 5】在 OnTick() 函數最開頭添加（第一行）
+================================================================================
+
+void OnTick()
+{
+    // === 網頁監控：心跳檢查 ===
+    if(TimeCurrent() - g_lastMonitorHeartbeat >= Monitor_HeartbeatMinutes * 60) {
+      SendMonitorHeartbeat();
+    }
+    
+    // === 網頁監控：新的一天重置 ===
+    static int last_day = 0;
+    int current_day = get_time_info_day(TimeCurrent());
+    if(current_day != last_day) {
+      g_dataSentToday = false;
+      last_day = current_day;
+    }
+    
+    // ... 原有的代碼繼續 ...
+
+
+【步驟 6】找到這段代碼並添加發送
+================================================================================
+
+找到這段（大約在 OnTick() 的 for 迴圈內）：
+
+        if (i == 每日最大統計次數_要x2) {
+          m_label2.Text((string("A總手數 : ") + string(DoubleToString(A手數總數,2))));
+          // ... 一堆 label 設定 ...
+          
+          // === 在這裡添加 ===
+          if(Monitor_AutoSend && 開始 == 0 && !g_dataSentToday) {
+             SendMonitorABStats();
+          }
+          // === 添加結束 ===
+
+        }
+      }
+      if (開始 == 0) {
+        測試TG通知 = 0;
+        // ... 原有的 TG 通知代碼 ...
+
+
+【步驟 7】修改 #property version
+================================================================================
+
+找到：
+#property version "9.01"
+
+改為：
+#property version "9.02"
+#property description "A計算盈虧_r9a + 網頁監控"
+
+
+【步驟 8】編譯並設定
+================================================================================
+
+1. 儲存檔案
+2. 按 F7 編譯
+3. 工具 -> 選項 -> EA交易
+4. 勾選「允許 WebRequest」
+5. 添加: http://192.168.31.206:8080
+6. 點擊確定
+7. 重新啟動 EA
+
+
+【步驟 9】測試
+================================================================================
+
+1. 查看日誌應該看到：
+   - "網頁監控已啟用"
+   - "✓ 網頁監控心跳成功"
+
+2. 按「開始」按鈕計算數據
+
+3. 查看日誌應該看到：
+   - "✓ A/B統計發送成功"
+   - 9 項數據
+
+4. 開啟網頁：http://192.168.31.206
+
+
+================================================================================
+【完整的插入位置視覺參考】
+================================================================================
+
+原始代碼結構：
+
+#property ...
+input 參數...
+全域變數...
+UI 函數...
+時間函數...
+歷史函數...
+Telegram 函數...
++++ 在這裡插入兩個監控函數 +++
+GMT 函數...
+OnChartEvent()...
+OnInit() {
+  ...
+  +++ 在 return 前插入監控初始化 +++
+}
+OnTick() {
+  +++ 第一行插入心跳和重置 +++
+  ...
+  for(...) {
+    if(i == 最大次數) {
+      設定 labels...
+      +++ 在這裡插入 SendMonitorABStats() +++
+    }
+  }
+}
+
+
+================================================================================
+完成！按照這 9 個步驟修改後，您的 EA 就整合了網頁監控功能！
+================================================================================

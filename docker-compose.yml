@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mt5-monitor-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - API_KEY=secret_key_2025_9093942525abcdxyz_
+      - TELEGRAM_BOT_TOKEN=6492162382:AAEKsQWDUXc7cJw0pS1z_lqsHZ6HIFLpjpw
+      - TELEGRAM_CHAT_ID=1942176657
+      - NOTIFY_ON_RECOVERY=true
+      - NOTIFY_OFFLINE=true
+      - HEARTBEAT_TIMEOUT_SECONDS=60
+      - RATE_LIMIT_PER_MIN=${RATE_LIMIT_PER_MIN:-60}
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - ENABLE_AUTH=${ENABLE_AUTH:-true}
+      - DB_PATH=/app/data/monitor.db
+    volumes:
+      - ./data:/app/data
+    networks:
+      - mt5-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8080/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mt5-monitor-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - mt5-network
+    environment:
+      - VITE_API_BASE=http://localhost:8080/api
+
+networks:
+  mt5-network:
+    driver: bridge
+
+volumes:
+  data:

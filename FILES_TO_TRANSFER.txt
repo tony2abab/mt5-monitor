@@ -1,0 +1,203 @@
+========================================
+Windows Server 2019 部署 - 檔案傳輸清單
+========================================
+
+從本地測試機器傳輸到 Windows Server 2019
+
+目標路徑：C:\MT5_Monitor
+
+========================================
+必要檔案和資料夾
+========================================
+
+✅ backend/                     (整個資料夾)
+   ├── src/                     (所有原始碼)
+   ├── package.json
+   ├── package-lock.json         ← 重要！
+   └── Dockerfile
+
+✅ frontend/                    (整個資料夾)
+   ├── src/                     (所有原始碼)
+   ├── public/
+   ├── package.json
+   ├── package-lock.json         ← 重要！
+   ├── Dockerfile
+   ├── vite.config.js
+   ├── nginx.conf                ← 重要！已修正
+   ├── index.html
+   ├── tailwind.config.js
+   └── postcss.config.js
+
+✅ mql/                         (整個資料夾)
+   ├── MT5_Monitor_Client.mq5   (MT5 EA)
+   ├── MT5_Monitor_Client.mq4   (MT4 EA)
+   └── README.md
+
+✅ docker-compose.yml            ← 必需！已修正
+✅ .env                          ← 必需！含您的設定
+✅ .env.example
+✅ .dockerignore
+
+========================================
+部署輔助檔案（新增）
+========================================
+
+✅ WINDOWS_SERVER_DEPLOYMENT.md      (完整部署指南)
+✅ deploy-windows-server.ps1         (自動部署腳本)
+✅ DEPLOYMENT_CHECKLIST.md           (快速檢查清單)
+✅ FILES_TO_TRANSFER.txt             (本檔案)
+
+========================================
+選用檔案
+========================================
+
+□ README.md                    (專案說明)
+□ DEPLOYMENT.md                (通用部署指南)
+□ WINDOWS_DOCKER_GUIDE.md      (Windows 本地指南)
+□ test-api.ps1                 (API 測試腳本)
+□ backup.ps1                   (備份腳本 - 如果有)
+
+========================================
+不需要傳輸的檔案
+========================================
+
+❌ node_modules/              (會在伺服器上重新安裝)
+❌ data/                      (資料庫會自動創建)
+❌ .git/                      (Git 歷史記錄)
+❌ backend/node_modules/
+❌ frontend/node_modules/
+❌ frontend/dist/             (會在構建時生成)
+
+========================================
+重要修正檔案（已更新）
+========================================
+
+這些檔案在本地測試時已修正，請確保使用最新版本：
+
+1. backend/src/app.js
+   - ✅ 已添加 trust proxy
+   - ✅ 已移除 frontend static serving
+   - ✅ 已修正 health endpoint 位置
+
+2. backend/src/routes/api.js
+   - ✅ 已添加 auth middleware 到 routes
+
+3. frontend/nginx.conf
+   - ✅ 已添加 API proxy 配置
+
+4. backend/Dockerfile
+   - ✅ 已修正 healthcheck 使用 127.0.0.1
+
+5. docker-compose.yml
+   - ✅ 已修正 healthcheck 使用 127.0.0.1
+
+6. backend/package-lock.json
+   - ✅ 已生成（npm ci 需要）
+
+7. frontend/package-lock.json
+   - ✅ 已生成（npm ci 需要）
+
+========================================
+傳輸方法建議
+========================================
+
+方法 1：遠端桌面複製貼上（推薦）
+--------------------------------------
+1. 使用遠端桌面連線到 Windows Server
+2. 在遠端桌面連線設定中：
+   - 本地資源 → 剪貼簿 ✓
+   - 本地資源 → 磁碟機 ✓
+3. 直接複製整個 MT5_Monitor 資料夾
+4. 貼到 C:\MT5_Monitor
+
+方法 2：壓縮傳輸
+--------------------------------------
+1. 在本地壓縮整個 MT5_Monitor 資料夾
+2. 透過遠端桌面的共享磁碟機傳輸
+3. 在伺服器上解壓縮到 C:\MT5_Monitor
+
+方法 3：網路共享
+--------------------------------------
+1. 設定 Windows Server 的網路共享
+2. 從本地複製檔案到共享資料夾
+
+========================================
+傳輸後檢查
+========================================
+
+在 Windows Server 上執行：
+
+cd C:\MT5_Monitor
+dir
+
+應該看到：
+- backend 資料夾
+- frontend 資料夾
+- mql 資料夾
+- docker-compose.yml
+- .env
+- deploy-windows-server.ps1
+- 等等...
+
+檢查重要檔案：
+dir backend\package-lock.json
+dir frontend\package-lock.json
+dir backend\Dockerfile
+dir frontend\Dockerfile
+dir frontend\nginx.conf
+
+========================================
+快速部署命令
+========================================
+
+傳輸完成後，在 Windows Server 上：
+
+# 方法 A：自動部署（推薦）
+.\deploy-windows-server.ps1
+
+# 方法 B：手動部署
+docker-compose up -d
+
+========================================
+檔案大小預估
+========================================
+
+不含 node_modules：約 10-20 MB
+含 node_modules：約 300-500 MB
+
+建議：不要傳輸 node_modules，讓 Docker 自動安裝
+
+========================================
+特別注意
+========================================
+
+⚠️ .env 檔案
+   - 包含 API_KEY 等敏感資訊
+   - 確保已修改為生產環境的強密碼
+   - 不要在 Git 中提交
+
+⚠️ package-lock.json
+   - 必須傳輸！
+   - npm ci 需要此檔案
+   - 確保與 package.json 版本一致
+
+⚠️ nginx.conf
+   - 已修正添加 API proxy
+   - 必須使用最新版本
+
+========================================
+部署準備檢查
+========================================
+
+在傳輸前確認：
+□ .env 已配置（API_KEY 已修改）
+□ package-lock.json 存在（backend 和 frontend）
+□ 所有程式碼是最新版本（已修正）
+□ Docker 檔案完整
+□ nginx.conf 已更新
+
+========================================
+
+如有疑問，請參考：
+- WINDOWS_SERVER_DEPLOYMENT.md (完整指南)
+- DEPLOYMENT_CHECKLIST.md (快速清單)

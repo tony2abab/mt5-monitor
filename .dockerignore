@@ -1,0 +1,14 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.env
+*.md
+dist
+build
+coverage
+.vscode
+.idea
+*.db
+*.sqlite
+data/

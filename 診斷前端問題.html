@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>前端診斷</title>
+    <style>
+        body {
+            margin: 20px;
+            font-family: Arial, sans-serif;
+            background: #1a1a2e;
+            color: #fff;
+        }
+        .test {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { border-left: 4px solid #00ff88; }
+        .error { border-left: 4px solid #ff4444; }
+        button {
+            background: #0f3460;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 5px;
+        }
+        button:hover { background: #1a4d7a; }
+        pre {
+            background: #0a0a0a;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 MT5 監控前端診斷</h1>
+    
+    <div class="test">
+        <h3>測試 1：訪問主頁</h3>
+        <button onclick="test1()">測試 http://192.168.31.206/</button>
+        <div id="result1"></div>
+    </div>
+    
+    <div class="test">
+        <h3>測試 2：CSS 文件</h3>
+        <button onclick="test2()">測試 CSS 加載</button>
+        <div id="result2"></div>
+    </div>
+    
+    <div class="test">
+        <h3>測試 3：JS 文件</h3>
+        <button onclick="test3()">測試 JS 加載</button>
+        <div id="result3"></div>
+    </div>
+    
+    <div class="test">
+        <h3>測試 4：API 連接</h3>
+        <button onclick="test4()">測試 API</button>
+        <div id="result4"></div>
+    </div>
+    
+    <div class="test">
+        <h3>測試 5：在新窗口打開</h3>
+        <button onclick="window.open('http://192.168.31.206', '_blank')">在新窗口打開主頁</button>
+        <button onclick="window.open('http://localhost', '_blank')">在新窗口打開 localhost</button>
+    </div>
+    
+    <div class="test">
+        <h3>完整診斷報告</h3>
+        <button onclick="fullDiagnosis()">運行完整診斷</button>
+        <div id="fullReport"></div>
+    </div>
+
+    <script>
+        async function test1() {
+            const div = document.getElementById('result1');
+            div.innerHTML = '測試中...';
+            try {
+                const res = await fetch('http://192.168.31.206/');
+                const text = await res.text();
+                div.innerHTML = `
+                    <div class="success">
+                        <p>✅ HTTP狀態: ${res.status}</p>
+                        <p>Content-Type: ${res.headers.get('content-type')}</p>
+                        <p>HTML長度: ${text.length} 字符</p>
+                        <pre>${text.substring(0, 500)}</pre>
+                    </div>
+                `;
+            } catch(e) {
+                div.innerHTML = `<div class="error">❌ 錯誤: ${e.message}</div>`;
+            }
+        }
+        
+        async function test2() {
+            const div = document.getElementById('result2');
+            div.innerHTML = '測試中...';
+            try {
+                const res = await fetch('http://192.168.31.206/assets/index-DEJr-E91.css');
+                const text = await res.text();
+                div.innerHTML = `
+                    <div class="success">
+                        <p>✅ CSS 狀態: ${res.status}</p>
+                        <p>文件大小: ${text.length} 字符</p>
+                        <p>包含 cyber-dark: ${text.includes('cyber-dark') ? '是' : '否'}</p>
+                        <pre>${text.substring(0, 300)}</pre>
+                    </div>
+                `;
+            } catch(e) {
+                div.innerHTML = `<div class="error">❌ 錯誤: ${e.message}</div>`;
+            }
+        }
+        
+        async function test3() {
+            const div = document.getElementById('result3');
+            div.innerHTML = '測試中...';
+            try {
+                const res = await fetch('http://192.168.31.206/assets/index-C9wShWGS.js');
+                div.innerHTML = `
+                    <div class="success">
+                        <p>✅ JS 狀態: ${res.status}</p>
+                        <p>Content-Type: ${res.headers.get('content-type')}</p>
+                    </div>
+                `;
+            } catch(e) {
+                div.innerHTML = `<div class="error">❌ 錯誤: ${e.message}</div>`;
+            }
+        }
+        
+        async function test4() {
+            const div = document.getElementById('result4');
+            div.innerHTML = '測試中...';
+            try {
+                const res = await fetch('http://192.168.31.206:8080/api/nodes');
+                const data = await res.json();
+                div.innerHTML = `
+                    <div class="success">
+                        <p>✅ API 狀態: ${res.status}</p>
+                        <p>節點數量: ${data.nodes.length}</p>
+                        <p>在線節點: ${data.summary.online}</p>
+                        <pre>${JSON.stringify(data, null, 2).substring(0, 500)}</pre>
+                    </div>
+                `;
+            } catch(e) {
+                div.innerHTML = `<div class="error">❌ 錯誤: ${e.message}</div>`;
+            }
+        }
+        
+        async function fullDiagnosis() {
+            const div = document.getElementById('fullReport');
+            div.innerHTML = '<p>運行完整診斷...</p>';
+            
+            let report = '<div class="success">';
+            report += '<h4>📊 診斷結果</h4>';
+            
+            // 測試所有
+            const tests = [
+                { name: 'HTML', url: 'http://192.168.31.206/' },
+                { name: 'CSS', url: 'http://192.168.31.206/assets/index-DEJr-E91.css' },
+                { name: 'JS', url: 'http://192.168.31.206/assets/index-C9wShWGS.js' },
+                { name: 'API', url: 'http://192.168.31.206:8080/api/nodes' }
+            ];
+            
+            for(const test of tests) {
+                try {
+                    const res = await fetch(test.url);
+                    report += `<p>✅ ${test.name}: ${res.status} OK</p>`;
+                } catch(e) {
+                    report += `<p>❌ ${test.name}: ${e.message}</p>`;
+                }
+            }
+            
+            report += '<h4>🌐 瀏覽器信息</h4>';
+            report += `<p>User Agent: ${navigator.userAgent}</p>`;
+            report += `<p>當前 URL: ${window.location.href}</p>`;
+            
+            report += '</div>';
+            div.innerHTML = report;
+        }
+    </script>
+</body>
+</html>

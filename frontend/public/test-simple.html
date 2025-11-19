@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>簡單測試</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #0B1221;
+            color: #fff;
+        }
+        .card {
+            background: #16213e;
+            border: 1px solid #00F0FF;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .status { 
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .online { background: #00FF88; color: #000; }
+        .offline { background: #ff4444; color: #fff; }
+        .data { 
+            display: flex; 
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #333;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="color: #00F0FF;">🚀 MT5 監控系統</h1>
+    
+    <div id="nodes-container">
+        <p>正在載入...</p>
+    </div>
+
+    <script>
+        async function loadData() {
+            try {
+                console.log('開始載入數據...');
+                const response = await fetch('/api/nodes');
+                console.log('HTTP狀態:', response.status);
+                
+                const data = await response.json();
+                console.log('收到數據:', data);
+                
+                const container = document.getElementById('nodes-container');
+                
+                if (data.ok && data.nodes.length > 0) {
+                    let html = '';
+                    
+                    data.nodes.forEach(node => {
+                        const statusClass = node.status === 'online' ? 'online' : 'offline';
+                        const stats = node.todayABStats;
+                        
+                        html += `
+                            <div class="card">
+                                <h2>${node.name} <span class="status ${statusClass}">${node.status}</span></h2>
+                                <p>ID: ${node.id} | 帳號: ${node.account}</p>
+                                <p>經紀商: ${node.broker}</p>
+                                <p>最後心跳: ${node.lastHeartbeatRelative}</p>
+                        `;
+                        
+                        if (stats) {
+                            html += `
+                                <h3 style="color: #00F0FF; margin-top: 20px;">📊 今日 A/B 統計</h3>
+                                <div class="data">
+                                    <span>A手數:</span>
+                                    <span style="color: #00F0FF;">${stats.a_lots_total?.toFixed(2) ?? '0.00'}</span>
+                                </div>
+                                <div class="data">
+                                    <span>B手數:</span>
+                                    <span style="color: #8A2BE2;">${stats.b_lots_total?.toFixed(2) ?? '0.00'}</span>
+                                </div>
+                                <div class="data">
+                                    <span>手數差:</span>
+                                    <span style="color: ${(stats.lots_diff ?? 0) !== 0 ? '#ff4444' : '#fff'};">
+                                        ${stats.lots_diff >= 0 ? '+' : ''}${stats.lots_diff?.toFixed(2) ?? '0.00'}
+                                    </span>
+                                </div>
+                                <div class="data">
+                                    <span>A盈利:</span>
+                                    <span style="color: ${(stats.a_profit_total ?? 0) >= 0 ? '#00FF88' : '#ff4444'};">
+                                        ${(stats.a_profit_total ?? 0) >= 0 ? '+' : ''}$${stats.a_profit_total?.toFixed(2) ?? '0.00'}
+                                    </span>
+                                </div>
+                                <div class="data">
+                                    <span>B盈利:</span>
+                                    <span style="color: ${(stats.b_profit_total ?? 0) >= 0 ? '#00FF88' : '#ff4444'};">
+                                        ${(stats.b_profit_total ?? 0) >= 0 ? '+' : ''}$${stats.b_profit_total?.toFixed(2) ?? '0.00'}
+                                    </span>
+                                </div>
+                                <div class="data" style="border-bottom: none; font-weight: bold; font-size: 16px;">
+                                    <span style="color: #FFD700;">AB總盈利:</span>
+                                    <span style="color: ${(stats.ab_profit_total ?? 0) >= 0 ? '#00FF88' : '#ff4444'};">
+                                        ${(stats.ab_profit_total ?? 0) >= 0 ? '+' : ''}$${stats.ab_profit_total?.toFixed(2) ?? '0.00'}
+                                    </span>
+                                </div>
+                                <div class="data" style="border-bottom: none;">
+                                    <span>每手成本:</span>
+                                    <span style="color: #FFFF00;">$${stats.cost_per_lot?.toFixed(2) ?? '0.00'}</span>
+                                </div>
+                                <div class="data" style="border-bottom: none;">
+                                    <span>A總息:</span>
+                                    <span>${stats.a_interest_total?.toFixed(2) ?? '0.00'}</span>
+                                </div>
+                            `;
+                        } else {
+                            html += '<p style="color: #888;">尚無統計數據</p>';
+                        }
+                        
+                        html += '</div>';
+                    });
+                    
+                    container.innerHTML = html;
+                    console.log('✅ 數據顯示成功！');
+                } else {
+                    container.innerHTML = '<div class="card"><p style="color: #ff4444;">無節點數據</p></div>';
+                }
+            } catch (error) {
+                console.error('❌ 錯誤:', error);
+                document.getElementById('nodes-container').innerHTML = 
+                    `<div class="card"><p style="color: #ff4444;">錯誤: ${error.message}</p></div>`;
+            }
+        }
+        
+        // 頁面載入後執行
+        loadData();
+        
+        // 每10秒自動刷新
+        setInterval(loadData, 10000);
+    </script>
+</body>
+</html>

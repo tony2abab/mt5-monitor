@@ -1,0 +1,173 @@
+// ===== OnTick 函數（完整版，包含監控功能）=====
+
+void OnTick()
+{
+    // === 網頁監控：心跳檢查 ===
+    if(TimeCurrent() - g_lastMonitorHeartbeat >= Monitor_HeartbeatMinutes * 60) SendMonitorHeartbeat();
+    
+    // === 網頁監控：新的一天重置 ===
+    static int monitor_last_day = 0;
+    int monitor_current_day = get_time_info_day(TimeCurrent());
+    if(monitor_current_day != monitor_last_day) {
+       g_dataSentToday = false;
+       monitor_last_day = monitor_current_day;
+    }
+
+    if (get_time_info_hour((TimeLocal() - TimeGMT())) == 8) {
+      是夏令時間 = 1;
+    } else {
+      是夏令時間 = 0;
+    }
+    S4_分加一 = Step4_IC分_0to58 + 1;
+    m_label12.Text((string("Step4 (本平台時間)  ") + string(S4_時_變數) + string(":") + string(Step4_IC分_0to58)));
+    m_label12.Color(0xffffff);
+    m_label12.Font("Calibri");
+    m_label13.Text((string("Step4 (input的IC時間)  ") + string(Step4_IC時) + string(":") + string(Step4_IC分_0to58)));
+    m_label13.Color(0xffffff);
+    m_label13.Font("Calibri");
+    m_label14.Text((string("每手成本超過多少通知 = ") + string(每手成本超過多少通知)));
+    m_label14.Color(0xffffff);
+    m_label14.Font("Calibri");
+    m_label21.Text((string("ID = ") + string(檔案頭ID)));
+    m_label21.Color(0xffcc33);
+    m_label21.Font("Calibri");
+    if ((今天 == 1 || Kbar數2 != iBars(Symbol(), (ENUM_TIMEFRAMES)PERIOD_D1))) {
+      已發出TG通知1 = 0;
+      Step4時間已進入3 = 0;
+      Kbar數2 = iBars(Symbol(), (ENUM_TIMEFRAMES)PERIOD_D1);
+      Print("新一天開始");
+      m_label2.Text((string("A總手數 : ") + string("")));
+      m_label2.Color(0xffffff);
+      m_label2.Font("Calibri");
+      m_label3.Text((string("A總盈利 : ") + string("")));
+      m_label3.Color(0xffffff);
+      m_label3.Font("Calibri");
+      m_label25.Text((string("A總息 : ") + string("")));
+      m_label25.Color(0xffffff);
+      m_label25.Font("Calibri");
+      m_label4.Text((string("B總手數 : ") + string("")));
+      m_label4.Color(0xffffff);
+      m_label4.Font("Calibri");
+      m_label5.Text((string("B總盈利 : ") + string("")));
+      m_label5.Color(0xffffff);
+      m_label5.Font("Calibri");
+      m_label6.Text((string("A與B的手數差 : ") + string("")));
+      m_label6.Color(0xffffff);
+      m_label6.Font("Calibri");
+      m_label7.Text((string("A+B的總盈利 : ") + string("")));
+      m_label7.Color(0xffffff);
+      m_label7.Font("Calibri");
+      m_label8.Text((string("每手成本US$ : ") + string("")));
+      m_label8.Color(0xffffff);
+      m_label8.Font("Calibri");
+      今天讀取時間();
+    }
+    開始_年 = StringToInteger(m_edit1.Text());
+    開始_月 = StringToInteger(m_edit2.Text());
+    開始_日 = StringToInteger(m_edit3.Text());
+    開始_時_變數 = StringToInteger(m_edit4.Text());
+    開始_分_變數 = StringToInteger(m_edit5.Text());
+    結束_年 = StringToInteger(m_edit6.Text());
+    結束_月 = StringToInteger(m_edit7.Text());
+    結束_日 = StringToInteger(m_edit8.Text());
+    結束_時_變數 = StringToInteger(m_edit9.Text());
+    結束_分_變數 = StringToInteger(m_edit10.Text());
+    if (Step4時間已進入2 == 0) {
+      if ((Step4時間已進入1 == 1 || (每日TG通知盈虧 == 1 && Check_TimeSession(week_enable1111111S4_時_變數Step4_IC分_0to58S4_時_變數S4_分加一, S4_時_變數,Step4_IC分_0to58,S4_時_變數,S4_分加一, TimeCurrent())))) {
+        檔名_A要求開始_write = FileOpen(input_檔名_A要求開始, FILE_CSV|FILE_WRITE|FILE_READ|FILE_COMMON|FILE_ANSI, " ");
+        FileWrite(檔名_A要求開始_write,1);
+        FileClose(檔名_A要求開始_write);
+        Step4時間已進入2 = 1;
+        Print("Step1時間已進入1");
+      }
+    }
+    if (Step4時間已進入2 == 1) {
+      檔名_A要求開始_write = FileOpen(input_檔名_A要求開始, FILE_CSV|FILE_WRITE|FILE_READ|FILE_COMMON|FILE_ANSI, ",");
+      A要求開始_狀態 = FileReadNumber(檔名_A要求開始_write);
+      FileClose(檔名_A要求開始_write);
+      if (A要求開始_狀態 == 0) {
+        Step4時間已進入3 = 1;
+        Print("Step1時間已進入2_B已寫回0");
+      }
+    }
+    if ((測試TG通知 == 1 || ((開始 == 1 || Step4時間已進入3 == 1)))) {
+      if (開始 == 0) {
+        今天讀取時間();
+      }
+      檔名_手數_write = FileOpen(input_檔名_手數, FILE_CSV|FILE_WRITE|FILE_READ|FILE_COMMON|FILE_ANSI, ",");
+      B手數總數 = FileReadNumber(檔名_手數_write);
+      FileClose(檔名_手數_write);
+      檔名_盈利_write = FileOpen(input_檔名_盈利, FILE_CSV|FILE_WRITE|FILE_READ|FILE_COMMON|FILE_ANSI, ",");
+      B盈利總數 = FileReadNumber(檔名_盈利_write);
+      FileClose(檔名_盈利_write);
+      A手數總數 = 0;
+      A盈利總數 = 0;
+      A總息 = 0;
+      for (int i = 1; i <= 每日最大統計次數_要x2; i=i+1) {
+        迴圈成交單號 = get_history_deal_ticket_by_position(i);
+        if (((datetime) get_history_property_integer_by_deal_ticket(迴圈成交單號, DEAL_TIME) >= convert_to_datetime(開始_年, 開始_月, 開始_日, 開始_時_變數, 開始_分_變數) && (datetime) get_history_property_integer_by_deal_ticket(迴圈成交單號, DEAL_TIME) <= convert_to_datetime(結束_年, 結束_月, 結束_日, 結束_時_變數, 結束_分_變數))) {
+          if ((get_history_property_integer_by_deal_ticket(迴圈成交單號, DEAL_ENTRY) == DEAL_ENTRY_OUT && get_history_property_string_by_deal_ticket(迴圈成交單號, DEAL_SYMBOL) == Symbol())) {
+            Print((string("第") + string(i) + string("筆盈利 = ") + string(get_history_property_double_by_deal_ticket(迴圈成交單號, DEAL_PROFIT)) + string(" / 平倉的時間 = ") + string((datetime) get_history_property_integer_by_deal_ticket(迴圈成交單號, DEAL_TIME))));
+            A盈利總數 = DoubleToString((A盈利總數 + get_history_property_double_by_deal_ticket(迴圈成交單號, DEAL_PROFIT)),2);
+            A手數總數 = DoubleToString((A手數總數 + get_history_property_double_by_deal_ticket(迴圈成交單號, DEAL_VOLUME)),2);
+            A總息 = DoubleToString((A總息 + get_history_property_double_by_deal_ticket(迴圈成交單號, DEAL_SWAP)),2);
+          }
+        }
+        if (i == 每日最大統計次數_要x2) {
+          m_label2.Text((string("A總手數 : ") + string(DoubleToString(A手數總數,2))));
+          m_label2.Color(0x66ccff);
+          m_label2.Font("Calibri");
+          m_label3.Text((string("A總盈利 : ") + string(DoubleToString((A盈利總數 / 匯率變數),2))));
+          m_label3.Color(0x66ccff);
+          m_label3.Font("Calibri");
+          m_label25.Text((string("A總息 : ") + string(DoubleToString(A總息,2))));
+          m_label25.Color(0x66ccff);
+          m_label25.Font("Calibri");
+          if (A手數總數 - B手數總數 == 0) {
+            m_label6.Text((string("A與B的手數差 : ") + string(DoubleToString((A手數總數 - B手數總數),2))));
+            m_label6.Color(0x66ccff);
+            m_label6.Font("Calibri");
+          } else {
+            m_label6.Text((string("A與B的手數差 : ") + string(DoubleToString((A手數總數 - B手數總數),2))));
+            m_label6.Color(0x0000ff);
+            m_label6.Font("Calibri");
+          }
+          m_label4.Text((string("B總手數 : ") + string(DoubleToString(B手數總數,2))));
+          m_label4.Color(0x66ccff);
+          m_label4.Font("Calibri");
+          m_label5.Text((string("B總盈利 : ") + string(DoubleToString(B盈利總數,2))));
+          m_label5.Color(0x66ccff);
+          m_label5.Font("Calibri");
+          m_label7.Text((string("A+B的總盈利 : ") + string(DoubleToString((A盈利總數 / 匯率變數 + B盈利總數),2))));
+          m_label7.Color(0xffff33);
+          m_label7.Font("Calibri");
+          if (A手數總數 == 0) {
+            m_label8.Text((string("每手成本US$ : ") + string(0)));
+            m_label8.Color(0xffff33);
+            m_label8.Font("Calibri");
+          } else {
+            m_label8.Text((string("每手成本US$ : ") + string(DoubleToString(((A盈利總數 / 匯率變數 + B盈利總數) / A手數總數),2))));
+            m_label8.Color(0xffff33);
+            m_label8.Font("Calibri");
+          }
+        }
+      }
+      
+      // === 網頁監控：發送統計數據 ===
+      if(Monitor_AutoSend && !Monitor_OnlyHeartbeat && !g_dataSentToday && A手數總數 > 0) {
+         SendMonitorABStats();
+      }
+    }
+    開始 = 0;
+    今天 = 0;
+    object_update_buttons(&m_button1,0xffffff,0xff3333,"Calibri");
+    object_update_buttons(&m_button2,0xffffff,0xff3333,"Calibri");
+    object_update_buttons(&m_button3,0xffffff,0xff3333,"Calibri");
+    if ((((Step4時間已進入1 == 1 && Step4時間已進入2 == 1)) && Step4時間已進入3 == 1)) {
+      if (Check_TimeSession(week_enable1111111S4_時_變數Step4_IC分_0to58S4_時_變數S4_分加一, S4_時_變數,Step4_IC分_0to58,S4_時_變數,S4_分加一, TimeCurrent()) == false) {
+        Step4時間已進入1 = 0;
+        Step4時間已進入2 = 0;
+        Step4時間已進入3 = 0;
+      }
+    }
+}

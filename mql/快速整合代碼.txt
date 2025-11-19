@@ -1,0 +1,72 @@
+================================================================================
+快速整合代碼 - 直接複製貼上
+================================================================================
+
+【1】在 EA 開頭添加（第 1 行附近）
+================================================================================
+#include "WebMonitor.mqh"
+
+
+【2】添加輸入參數（在 input 區塊）
+================================================================================
+input string   __________監控系統__________ = "=====監控系統參數=====";
+input string   Monitor_API_URL = "http://192.168.31.206:8080/api";
+input string   Monitor_API_KEY = "secret_key_2025_9093942525abcdxyz_";
+input string   Monitor_NodeID = "A1_VPS0";
+input int      Monitor_HeartbeatMinutes = 15;
+input bool     Monitor_AutoSend = true;
+
+
+【3】添加全域變數（在全域變數區塊）
+================================================================================
+datetime g_lastMonitorHeartbeat = 0;
+bool g_dataSentToday = false;
+
+
+【4】在 OnInit() 中添加（return 之前）
+================================================================================
+   SendMonitorHeartbeat(Monitor_API_URL, Monitor_API_KEY, Monitor_NodeID, 
+                        檔案頭ID, g_lastMonitorHeartbeat);
+   Print("監控系統已啟用 - NodeID:", Monitor_NodeID);
+   Print("重要：請將 ", Monitor_API_URL, " 加入 WebRequest 白名單");
+
+
+【5】在 OnTick() 最開頭添加
+================================================================================
+   CheckAndSendHeartbeat(Monitor_API_URL, Monitor_API_KEY, Monitor_NodeID,
+                         檔案頭ID, Monitor_HeartbeatMinutes, g_lastMonitorHeartbeat);
+   
+   if(Kbar數2 != iBars(Symbol(), PERIOD_D1))
+   {
+      g_dataSentToday = false;
+   }
+
+
+【6】在計算完成後添加（在 已發出TG通知1 = 1; 之前）
+================================================================================
+          if(Monitor_AutoSend && 開始 == 0 && !g_dataSentToday)
+          {
+             SendMonitorABStats(
+                Monitor_API_URL,
+                Monitor_API_KEY,
+                Monitor_NodeID,
+                A手數總數,
+                B手數總數,
+                A盈利總數,
+                B盈利總數,
+                A總息,
+                匯率變數
+             );
+             g_dataSentToday = true;
+          }
+
+
+【7】編譯並設定
+================================================================================
+1. 按 F7 編譯
+2. 工具 -> 選項 -> EA交易 -> 添加 http://192.168.31.206:8080
+3. 掛載 EA 到圖表
+4. 開啟網頁 http://192.168.31.206 查看
+
+完成！
+================================================================================

@@ -1,0 +1,15 @@
+{
+  "name": "mt5-monitor",
+  "version": "1.0.0",
+  "description": "MT5 EA Trading Monitor System",
+  "scripts": {
+    "dev": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix backend && npm run build --prefix frontend",
+    "start": "npm run start --prefix backend",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+  },
+  "keywords": ["mt5", "trading", "monitor"],
+  "author": "",
+  "license": "MIT"
+}
