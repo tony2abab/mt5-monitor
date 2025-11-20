@@ -4,7 +4,7 @@ const telegram = require('./telegram');
 
 class HeartbeatService {
     constructor() {
-        this.timeoutSeconds = parseInt(process.env.HEARTBEAT_TIMEOUT_SECONDS) || 300;
+        this.timeoutSeconds = parseInt(process.env.HEARTBEAT_TIMEOUT_SECONDS) || 900; // 15 minutes default
         this.job = null;
         this.notifyOffline = process.env.NOTIFY_OFFLINE !== 'false'; // default on
         this.mutedNodeIds = new Set(); // nodes whose offline notifications are muted (e.g. hidden in UI)
