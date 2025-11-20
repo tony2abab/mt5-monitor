@@ -27,7 +27,11 @@ class HeartbeatService {
             nodes.forEach(node => {
                 if (!node.last_heartbeat) return;
                 
-                const lastHeartbeat = new Date(node.last_heartbeat);
+                // Parse as UTC by appending 'Z' if no timezone info
+                const lastHeartbeatStr = node.last_heartbeat.includes('T') || node.last_heartbeat.includes('Z') 
+                    ? node.last_heartbeat 
+                    : node.last_heartbeat + 'Z';
+                const lastHeartbeat = new Date(lastHeartbeatStr);
                 const secondsSinceHeartbeat = (now - lastHeartbeat) / 1000;
                 
                 const shouldBeOffline = secondsSinceHeartbeat > this.timeoutSeconds;
@@ -77,7 +81,11 @@ class HeartbeatService {
         if (!lastHeartbeat) return 'offline';
         
         const now = new Date();
-        const lastHeartbeatDate = new Date(lastHeartbeat);
+        // Parse as UTC by appending 'Z' if no timezone info
+        const lastHeartbeatStr = lastHeartbeat.includes('T') || lastHeartbeat.includes('Z') 
+            ? lastHeartbeat 
+            : lastHeartbeat + 'Z';
+        const lastHeartbeatDate = new Date(lastHeartbeatStr);
         const secondsSinceHeartbeat = (now - lastHeartbeatDate) / 1000;
         
         return secondsSinceHeartbeat > this.timeoutSeconds ? 'offline' : 'online';
