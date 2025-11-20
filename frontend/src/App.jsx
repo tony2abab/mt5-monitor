@@ -34,6 +34,24 @@ function App() {
       console.error('Failed to restore hidden nodes from storage:', err)
     }
   }, [])
+  // Helper function to calculate relative time
+  const getRelativeTime = (timestamp) => {
+    if (!timestamp) return '從未'
+    
+    const now = new Date()
+    const past = new Date(timestamp)
+    const diffMs = now - past
+    const diffSec = Math.floor(diffMs / 1000)
+    const diffMin = Math.floor(diffSec / 60)
+    const diffHour = Math.floor(diffMin / 60)
+    const diffDay = Math.floor(diffHour / 24)
+    
+    if (diffSec < 60) return `${diffSec} 秒前`
+    if (diffMin < 60) return `${diffMin} 分鐘前`
+    if (diffHour < 24) return `${diffHour} 小時前`
+    return `${diffDay} 天前`
+  }
+
   const fetchNodes = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE}/nodes`)
@@ -41,7 +59,14 @@ function App() {
       
       const data = await response.json()
       if (data.ok) {
-        setNodes(data.nodes)
+        // Add relative time fields to each node
+        const nodesWithRelativeTime = data.nodes.map(node => ({
+          ...node,
+          lastHeartbeatRelative: getRelativeTime(node.last_heartbeat),
+          lastStatsRelative: getRelativeTime(node.last_ab_stats_at || node.last_stats_at)
+        }))
+        
+        setNodes(nodesWithRelativeTime)
         setSummary(data.summary)
         setError(null)
       } else {
