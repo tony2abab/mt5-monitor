@@ -38,14 +38,25 @@ function App() {
   const getRelativeTime = (timestamp) => {
     if (!timestamp) return '從未'
     
+    // Handle backend format: "2025-11-20 14:09:46" (assume UTC)
+    // Convert to ISO format for proper parsing
+    let past
+    if (timestamp.includes('T')) {
+      // Already ISO format
+      past = new Date(timestamp)
+    } else {
+      // Backend format: "YYYY-MM-DD HH:MM:SS" - treat as UTC
+      past = new Date(timestamp + 'Z')
+    }
+    
     const now = new Date()
-    const past = new Date(timestamp)
     const diffMs = now - past
     const diffSec = Math.floor(diffMs / 1000)
     const diffMin = Math.floor(diffSec / 60)
     const diffHour = Math.floor(diffMin / 60)
     const diffDay = Math.floor(diffHour / 24)
     
+    if (diffSec < 0) return '剛剛'
     if (diffSec < 60) return `${diffSec} 秒前`
     if (diffMin < 60) return `${diffMin} 分鐘前`
     if (diffHour < 24) return `${diffHour} 小時前`
@@ -59,11 +70,16 @@ function App() {
       
       const data = await response.json()
       if (data.ok) {
-        // Add relative time fields to each node
+        // Add relative time fields to each node (override backend's English version with Chinese)
         const nodesWithRelativeTime = data.nodes.map(node => ({
           ...node,
           lastHeartbeatRelative: getRelativeTime(node.last_heartbeat),
-          lastStatsRelative: getRelativeTime(node.last_ab_stats_at || node.last_stats_at)
+          lastStatsRelative: getRelativeTime(
+            node.todayABStats?.reported_at || 
+            node.todayStats?.reported_at || 
+            node.last_ab_stats_at || 
+            node.last_stats_at
+          )
         }))
         
         setNodes(nodesWithRelativeTime)
