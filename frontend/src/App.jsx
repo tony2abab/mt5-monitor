@@ -243,8 +243,9 @@ function App() {
     totalALots: processedNodes.reduce((sum, n) => sum + (n.todayABStats?.a_lots_total || 0), 0),
     totalBLots: processedNodes.reduce((sum, n) => sum + (n.todayABStats?.b_lots_total || 0), 0),
     totalAInterest: processedNodes.reduce((sum, n) => sum + (n.todayABStats?.a_interest_total || 0), 0),
+    // A和B是同一筆交易的兩邊，手數只需算一次
     totalCommission: processedNodes.reduce((sum, n) => {
-      const lots = (n.todayABStats?.a_lots_total || 0) + (n.todayABStats?.b_lots_total || 0);
+      const lots = n.todayABStats?.a_lots_total || 0;
       const commissionRate = n.todayABStats?.commission_per_lot || 0;
       return sum + (lots * commissionRate);
     }, 0)

@@ -69,9 +69,10 @@ class SnapshotService {
             const total_ab_profit = enrichedNodes.reduce((sum, n) => sum + (n.todayABStats?.ab_profit_total || 0), 0);
             const total_lots = total_a_lots + total_b_lots;
             
-            // 計算總回佣 = Σ(commission_per_lot × total_lots)
+            // 計算總回佣 = Σ(commission_per_lot × a_lots_total)
+            // 注意：A和B是同一筆交易的兩邊，手數只需算一次
             const total_commission = enrichedNodes.reduce((sum, n) => {
-                const lots = (n.todayABStats?.a_lots_total || 0) + (n.todayABStats?.b_lots_total || 0);
+                const lots = n.todayABStats?.a_lots_total || 0;
                 const commission_rate = n.todayABStats?.commission_per_lot || 0;
                 return sum + (lots * commission_rate);
             }, 0);
@@ -109,15 +110,22 @@ class SnapshotService {
      */
     manualSnapshot(dateStr) {
         try {
-            // 獲取當前交易日期，用於比較
+            // 使用當前交易日期，確保與頂部總表一致
             const currentTradingDate = db.getCurrentTradingDate();
-            console.log(`[Snapshot] Creating manual snapshot for ${dateStr} (current trading date: ${currentTradingDate})`);
+            const useDate = dateStr || currentTradingDate;
             
-            // 根據指定日期獲取數據
+            console.log(`[Snapshot] Creating snapshot for ${useDate} (current trading date: ${currentTradingDate})`);
+            
+            // 使用與頂部總表完全相同的數據源
             const nodes = db.getAllNodes();
-            const todayABStats = db.getAllABStatsByDate(dateStr);
+            const todayABStats = db.getAllABStatsByDate(useDate);
             
-            console.log(`[Snapshot] Found ${todayABStats.length} AB stats records for ${dateStr}`);
+            console.log(`[Snapshot] Found ${todayABStats.length} AB stats records for ${useDate}`);
+            
+            // 打印每個節點的數據，方便調試
+            todayABStats.forEach(stat => {
+                console.log(`[Snapshot] Node ${stat.node_id}: ab_profit=${stat.ab_profit_total}, a_lots=${stat.a_lots_total}`);
+            });
             
             const abStatsMap = {};
             todayABStats.forEach(stat => {
@@ -140,9 +148,10 @@ class SnapshotService {
             const total_ab_profit = enrichedNodes.reduce((sum, n) => sum + (n.todayABStats?.ab_profit_total || 0), 0);
             const total_lots = total_a_lots + total_b_lots;
             
-            // 計算總回佣 = Σ(commission_per_lot × total_lots)
+            // 計算總回佣 = Σ(commission_per_lot × a_lots_total)
+            // 注意：A和B是同一筆交易的兩邊，手數只需算一次
             const total_commission = enrichedNodes.reduce((sum, n) => {
-                const lots = (n.todayABStats?.a_lots_total || 0) + (n.todayABStats?.b_lots_total || 0);
+                const lots = n.todayABStats?.a_lots_total || 0;
                 const commission_rate = n.todayABStats?.commission_per_lot || 0;
                 return sum + (lots * commission_rate);
             }, 0);
@@ -166,11 +175,11 @@ class SnapshotService {
             console.log(`[Snapshot] Calculated totals - AB Profit: ${total_ab_profit}, A Lots: ${total_a_lots}, B Lots: ${total_b_lots}`);
             
             db.createDailySnapshot({
-                snapshot_date: dateStr,
+                snapshot_date: useDate,
                 ...summary
             });
             
-            console.log(`[Snapshot] Manual snapshot created for ${dateStr}:`, summary);
+            console.log(`[Snapshot] Manual snapshot created for ${useDate}:`, summary);
             return summary;
         } catch (error) {
             console.error('[Snapshot] Error creating manual snapshot:', error);
