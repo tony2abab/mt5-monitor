@@ -14,9 +14,12 @@ class SchedulerService {
      */
     start(config = {}) {
         const {
-            reportTime1 = '45 23 * * *',  // 默認 23:45 倫敦時間
-            reportTime2 = '0 10 * * *'     // 默認 10:00 倫敦時間
+            reportTime1 = '45 23 * * *',  // 默認 23:45 CFD平台時間
+            reportTime2 = '0 10 * * *'     // 默認 10:00 CFD平台時間
         } = config;
+        
+        // 使用 TRADING_TIMEZONE 環境變數，默認 CFD 平台時間
+        const timezone = process.env.TRADING_TIMEZONE || 'Europe/Athens';
         
         // 保存設定的上報時間
         this.reportTime1 = reportTime1;
@@ -31,7 +34,7 @@ class SchedulerService {
             this.lastScheduledReportTime = new Date().toISOString();
             this.requestAllNodesReport('Scheduled report time 1');
         }, {
-            timezone: 'Europe/London'
+            timezone: timezone
         });
         
         // 任務 2：第二個上報時間
@@ -39,14 +42,14 @@ class SchedulerService {
             this.lastScheduledReportTime = new Date().toISOString();
             this.requestAllNodesReport('Scheduled report time 2');
         }, {
-            timezone: 'Europe/London'
+            timezone: timezone
         });
         
         // 任務 3：每天清理舊的上報請求
         const task3 = cron.schedule('0 2 * * *', () => {
             this.cleanupOldRequests();
         }, {
-            timezone: 'Europe/London'
+            timezone: timezone
         });
         
         this.tasks.push(task1, task2, task3);

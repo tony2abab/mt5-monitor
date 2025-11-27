@@ -11,7 +11,7 @@ class HeartbeatService {
     }
     
     /**
-     * 檢查是否在交易時段（倫敦時間）
+     * 檢查是否在交易時段（CFD平台時間：冬令GMT+2，夏令GMT+3）
      * 週一至週五 01:30-23:30
      */
     isWithinTradingHours() {
@@ -21,7 +21,7 @@ class HeartbeatService {
         }
 
         const now = new Date();
-        const timezone = process.env.TRADING_TIMEZONE || 'Europe/London';
+        const timezone = process.env.TRADING_TIMEZONE || 'Europe/Athens';
         
         // 轉換為指定時區的時間
         const tradingTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
@@ -49,13 +49,13 @@ class HeartbeatService {
     }
     
     /**
-     * 檢查當前是否在每日收市時段（23:50-01:15 倫敦時間）
+     * 檢查當前是否在每日收市時段（23:50-01:15 CFD平台時間）
      * 在此時段內不應發送離線通知，因為市場關閉沒有 tick
      * 此時段與交易日邏輯一致：01:30 前算前一天，01:30 後算新一天
      * @returns {boolean}
      */
     isMarketClosingTime() {
-        const timezone = process.env.TRADING_TIMEZONE || 'Europe/London';
+        const timezone = process.env.TRADING_TIMEZONE || 'Europe/Athens';
         const now = new Date();
         const tradingTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
         
@@ -87,7 +87,7 @@ class HeartbeatService {
             return true; // 未啟用時段限制，總是允許通知
         }
 
-        const timezone = process.env.TRADING_TIMEZONE || 'Europe/London';
+        const timezone = process.env.TRADING_TIMEZONE || 'Europe/Athens';
         
         // 轉換為指定時區的時間
         const tradingTime = new Date(dateTime.toLocaleString('en-US', { timeZone: timezone }));
@@ -128,7 +128,7 @@ class HeartbeatService {
         if (process.env.TRADING_HOURS_ENABLED === 'true') {
             const start = process.env.TRADING_HOURS_START || '01:30';
             const end = process.env.TRADING_HOURS_END || '23:30';
-            const timezone = process.env.TRADING_TIMEZONE || 'Europe/London';
+            const timezone = process.env.TRADING_TIMEZONE || 'Europe/Athens';
             const daysStart = process.env.TRADING_DAYS_START || '1';
             const daysEnd = process.env.TRADING_DAYS_END || '5';
             const dayNames = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];

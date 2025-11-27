@@ -273,11 +273,11 @@ function App() {
             <div className="mb-2 text-sm text-white">
               <span>
                 最後上報: {snapshotInfo.lastSnapshot 
-                  ? `${snapshotInfo.lastSnapshot.london} (${snapshotInfo.lastSnapshot.hk})`
+                  ? `${snapshotInfo.lastSnapshot.platform} (${snapshotInfo.lastSnapshot.hk})`
                   : '尚無記錄'
                 }
                 {' | '}
-                下次快照: {snapshotInfo.nextSnapshot.london} ({snapshotInfo.nextSnapshot.hk})
+                下次快照: {snapshotInfo.nextSnapshot.platform} ({snapshotInfo.nextSnapshot.hk})
               </span>
             </div>
           )}

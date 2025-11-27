@@ -10,38 +10,37 @@ class SnapshotService {
     }
     
     start() {
-        // 每天倫敦時間 00:30 執行快照
+        // 每天 CFD 平台時間 00:30 執行快照
         // Cron 表達式：分 時 日 月 週
-        // 使用 UTC 時間，需要根據倫敦時間調整
-        // 倫敦冬令時間 00:30 = UTC 00:30
-        // 倫敦夏令時間 00:30 = UTC 23:30（前一天）
-        // 為了簡化，我們在 UTC 00:30 執行，並在函數內部轉換為倫敦時間判斷
+        // 使用 TRADING_TIMEZONE 環境變數，默認 CFD 平台時間 (Europe/Athens)
+        const timezone = process.env.TRADING_TIMEZONE || 'Europe/Athens';
         
         this.job = cron.schedule('30 0 * * *', () => {
             this.createDailySnapshot();
             this.lastAutoSnapshotTime = new Date().toISOString();
         }, {
-            timezone: 'Europe/London' // 使用倫敦時區
+            timezone: timezone
         });
         
-        console.log('Snapshot service started - Daily snapshots at 00:30 London time');
+        console.log(`Snapshot service started - Daily snapshots at 00:30 ${timezone} time`);
     }
     
     /**
      * 創建每日快照
-     * 保存前一天（倫敦時間 00:30 之前）的總覽數據
+     * 保存前一天（CFD平台時間 00:30 之前）的總覽數據
      */
     createDailySnapshot() {
         try {
             const now = new Date();
-            const londonTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/London' }));
+            const timezone = process.env.TRADING_TIMEZONE || 'Europe/Athens';
+            const platformTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
             
             // 快照日期是前一天
-            const snapshotDate = new Date(londonTime);
+            const snapshotDate = new Date(platformTime);
             snapshotDate.setDate(snapshotDate.getDate() - 1);
             const snapshotDateStr = snapshotDate.toISOString().split('T')[0]; // YYYY-MM-DD
             
-            console.log(`[Snapshot] Creating daily snapshot for ${snapshotDateStr} at London time ${londonTime.toISOString()}`);
+            console.log(`[Snapshot] Creating daily snapshot for ${snapshotDateStr} at platform time ${platformTime.toISOString()}`);
             
             // 獲取前一天的所有節點和統計數據
             const nodes = db.getAllNodes();

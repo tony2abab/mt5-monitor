@@ -210,28 +210,28 @@ class DatabaseManager {
     
     /**
      * 獲取當前交易日期
-     * 倫敦時間 00:00-01:30 之間算前一天，01:30 之後算當天
+     * CFD平台時間 00:00-01:30 之間算前一天，01:30 之後算當天
      */
     getCurrentTradingDate() {
         const now = new Date();
-        const timezone = process.env.TRADING_TIMEZONE || 'Europe/London';
+        const timezone = process.env.TRADING_TIMEZONE || 'Europe/Athens';
         
-        // 轉換為倫敦時間
-        const londonTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+        // 轉換為 CFD 平台時間
+        const platformTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
         
-        const hours = londonTime.getHours();
-        const minutes = londonTime.getMinutes();
+        const hours = platformTime.getHours();
+        const minutes = platformTime.getMinutes();
         const timeInMinutes = hours * 60 + minutes;
         
         // 如果在 00:00-01:30 之間（0-90 分鐘），使用前一天的日期
         if (timeInMinutes < 90) { // 01:30 = 90 分鐘
-            londonTime.setDate(londonTime.getDate() - 1);
+            platformTime.setDate(platformTime.getDate() - 1);
         }
         
         // 返回 YYYY-MM-DD 格式
-        const year = londonTime.getFullYear();
-        const month = String(londonTime.getMonth() + 1).padStart(2, '0');
-        const day = String(londonTime.getDate()).padStart(2, '0');
+        const year = platformTime.getFullYear();
+        const month = String(platformTime.getMonth() + 1).padStart(2, '0');
+        const day = String(platformTime.getDate()).padStart(2, '0');
         
         return `${year}-${month}-${day}`;
     }

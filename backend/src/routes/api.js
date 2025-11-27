@@ -613,13 +613,14 @@ router.get('/nodes-by-date', (req, res) => {
 // GET /api/snapshot-info - Get snapshot timing information
 router.get('/snapshot-info', (req, res) => {
     try {
-        const timezone = process.env.TRADING_TIMEZONE || 'Europe/London';
+        // CFD 平台時間（冬令 GMT+2，夏令 GMT+3）
+        const timezone = process.env.TRADING_TIMEZONE || 'Europe/Athens';
         const now = new Date();
         
-        // 輔助函數：將時間格式化為倫敦時間字串
-        const formatLondonTime = (date) => {
-            const londonDate = new Date(date.toLocaleString('en-US', { timeZone: timezone }));
-            return `${String(londonDate.getDate()).padStart(2, '0')}/${String(londonDate.getMonth() + 1).padStart(2, '0')} ${String(londonDate.getHours()).padStart(2, '0')}:${String(londonDate.getMinutes()).padStart(2, '0')}`;
+        // 輔助函數：將時間格式化為 CFD 平台時間字串
+        const formatPlatformTime = (date) => {
+            const platformDate = new Date(date.toLocaleString('en-US', { timeZone: timezone }));
+            return `${String(platformDate.getDate()).padStart(2, '0')}/${String(platformDate.getMonth() + 1).padStart(2, '0')} ${String(platformDate.getHours()).padStart(2, '0')}:${String(platformDate.getMinutes()).padStart(2, '0')}`;
         };
         
         // 輔助函數：將時間格式化為香港時間字串
@@ -628,22 +629,22 @@ router.get('/snapshot-info', (req, res) => {
             return `HK ${String(hkDate.getDate()).padStart(2, '0')}/${String(hkDate.getMonth() + 1).padStart(2, '0')} ${String(hkDate.getHours()).padStart(2, '0')}:${String(hkDate.getMinutes()).padStart(2, '0')}`;
         };
         
-        // 輔助函數：解析 cron 表達式並計算下次執行時間（倫敦時間）
+        // 輔助函數：解析 cron 表達式並計算下次執行時間（CFD平台時間）
         const getNextCronTime = (cronExpr) => {
             // cron 格式: 分 時 日 月 週
             const parts = cronExpr.split(' ');
             const minute = parseInt(parts[0]);
             const hour = parseInt(parts[1]);
             
-            // 獲取當前倫敦時間
-            const londonNow = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+            // 獲取當前 CFD 平台時間
+            const platformNow = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
             
             // 創建今天的執行時間
-            const todayRun = new Date(londonNow);
+            const todayRun = new Date(platformNow);
             todayRun.setHours(hour, minute, 0, 0);
             
             // 如果今天的執行時間已過，則是明天
-            if (londonNow >= todayRun) {
+            if (platformNow >= todayRun) {
                 todayRun.setDate(todayRun.getDate() + 1);
             }
             
@@ -662,18 +663,18 @@ router.get('/snapshot-info', (req, res) => {
         const nextReportTime = nextTime1 < nextTime2 ? nextTime1 : nextTime2;
         
         // 格式化下次上報時間
-        const nextSnapshotLondon = formatLondonTime(nextReportTime);
+        const nextSnapshotPlatform = formatPlatformTime(nextReportTime);
         const nextSnapshotHK = formatHKTime(nextReportTime);
         
         // 獲取最後上報時間（優先使用定時上報，其次是手動請求）
         let lastSnapshotTime = schedulerService.lastScheduledReportTime || snapshotService.lastManualRequestTime || null;
         
-        // 如果有最後上報時間，格式化為倫敦和香港時間
-        let lastSnapshotLondon = null;
+        // 如果有最後上報時間，格式化為 CFD 平台時間和香港時間
+        let lastSnapshotPlatform = null;
         let lastSnapshotHK = null;
         if (lastSnapshotTime) {
             const lastTime = new Date(lastSnapshotTime);
-            lastSnapshotLondon = formatLondonTime(lastTime);
+            lastSnapshotPlatform = formatPlatformTime(lastTime);
             lastSnapshotHK = formatHKTime(lastTime);
         }
         
@@ -685,11 +686,11 @@ router.get('/snapshot-info', (req, res) => {
             currentTradingDate,
             lastSnapshot: lastSnapshotTime ? {
                 utc: lastSnapshotTime,
-                london: lastSnapshotLondon,
+                platform: lastSnapshotPlatform,
                 hk: lastSnapshotHK
             } : null,
             nextSnapshot: {
-                london: nextSnapshotLondon,
+                platform: nextSnapshotPlatform,
                 hk: nextSnapshotHK
             },
             serverTime: new Date().toISOString()
