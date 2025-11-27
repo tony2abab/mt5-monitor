@@ -22,6 +22,9 @@ module.exports = {
       TRADING_HOURS_END: '23:30',              // 結束時間
       CORS_ORIGIN: '*',
       RATE_LIMIT_PER_MIN: 60,
+      // Web 登入保護設定
+      WEB_LOGIN_ENABLED: 'true',                 // 啟用 Web 登入保護
+      WEB_PASSWORD: 'your-web-password-here',    // Web 登入密碼
       // 定時上報時間設定（CFD平台時間，cron 格式）
       REPORT_TIME_1: '45 23 * * *',  // 23:45
       REPORT_TIME_2: '0 10 * * *',   // 10:00
