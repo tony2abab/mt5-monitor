@@ -617,47 +617,56 @@ router.get('/snapshot-info', (req, res) => {
         const timezone = process.env.TRADING_TIMEZONE || 'Europe/Athens';
         const now = new Date();
         
-        // 輔助函數：將時間格式化為 CFD 平台時間字串
+        // 輔助函數：將 UTC Date 格式化為 CFD 平台時間字串
         const formatPlatformTime = (date) => {
             const platformDate = new Date(date.toLocaleString('en-US', { timeZone: timezone }));
             return `${String(platformDate.getDate()).padStart(2, '0')}/${String(platformDate.getMonth() + 1).padStart(2, '0')} ${String(platformDate.getHours()).padStart(2, '0')}:${String(platformDate.getMinutes()).padStart(2, '0')}`;
         };
         
-        // 輔助函數：將時間格式化為香港時間字串
+        // 輔助函數：將 UTC Date 格式化為香港時間字串
         const formatHKTime = (date) => {
             const hkDate = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Hong_Kong' }));
             return `HK ${String(hkDate.getDate()).padStart(2, '0')}/${String(hkDate.getMonth() + 1).padStart(2, '0')} ${String(hkDate.getHours()).padStart(2, '0')}:${String(hkDate.getMinutes()).padStart(2, '0')}`;
         };
         
-        // 輔助函數：解析 cron 表達式並計算下次執行時間（CFD平台時間）
-        const getNextCronTime = (cronExpr) => {
+        // 輔助函數：解析 cron 表達式並計算下次執行的 UTC 時間
+        const getNextCronTimeUTC = (cronExpr) => {
             // cron 格式: 分 時 日 月 週
             const parts = cronExpr.split(' ');
-            const minute = parseInt(parts[0]);
-            const hour = parseInt(parts[1]);
+            const targetMinute = parseInt(parts[0]);
+            const targetHour = parseInt(parts[1]);
             
             // 獲取當前 CFD 平台時間
-            const platformNow = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+            const platformNowStr = now.toLocaleString('en-US', { timeZone: timezone });
+            const platformNow = new Date(platformNowStr);
             
-            // 創建今天的執行時間
-            const todayRun = new Date(platformNow);
-            todayRun.setHours(hour, minute, 0, 0);
+            const currentHour = platformNow.getHours();
+            const currentMinute = platformNow.getMinutes();
+            const currentTimeInMinutes = currentHour * 60 + currentMinute;
+            const targetTimeInMinutes = targetHour * 60 + targetMinute;
             
-            // 如果今天的執行時間已過，則是明天
-            if (platformNow >= todayRun) {
-                todayRun.setDate(todayRun.getDate() + 1);
+            // 計算需要增加的分鐘數
+            let minutesToAdd;
+            if (currentTimeInMinutes < targetTimeInMinutes) {
+                // 今天還沒到目標時間
+                minutesToAdd = targetTimeInMinutes - currentTimeInMinutes;
+            } else {
+                // 今天已過目標時間，算明天
+                minutesToAdd = (24 * 60 - currentTimeInMinutes) + targetTimeInMinutes;
             }
             
-            return todayRun;
+            // 從當前 UTC 時間加上分鐘數
+            const nextRunUTC = new Date(now.getTime() + minutesToAdd * 60 * 1000);
+            return nextRunUTC;
         };
         
-        // 從 scheduler 獲取設定的上報時間
+        // 從環境變數或 scheduler 獲取設定的上報時間
         const reportTime1 = process.env.REPORT_TIME_1 || schedulerService.reportTime1 || '45 23 * * *';
         const reportTime2 = process.env.REPORT_TIME_2 || schedulerService.reportTime2 || '0 10 * * *';
         
-        // 計算兩個上報時間的下次執行時間
-        const nextTime1 = getNextCronTime(reportTime1);
-        const nextTime2 = getNextCronTime(reportTime2);
+        // 計算兩個上報時間的下次執行時間（UTC）
+        const nextTime1 = getNextCronTimeUTC(reportTime1);
+        const nextTime2 = getNextCronTimeUTC(reportTime2);
         
         // 選擇最近的一個
         const nextReportTime = nextTime1 < nextTime2 ? nextTime1 : nextTime2;
