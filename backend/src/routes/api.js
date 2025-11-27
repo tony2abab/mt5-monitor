@@ -155,6 +155,15 @@ router.post('/ab-stats', authMiddleware, (req, res) => {
             open_lots: open_lots || 0
         });
         
+        // 自動創建/更新當天的快照（讓歷史數據即時可見）
+        try {
+            snapshotService.manualSnapshot(date);
+            console.log(`[AB-Stats] Auto-updated snapshot for ${date}`);
+        } catch (snapshotError) {
+            console.error(`[AB-Stats] Failed to update snapshot for ${date}:`, snapshotError);
+            // 不影響主要響應
+        }
+        
         res.json({
             ok: true,
             serverTime: new Date().toISOString()
