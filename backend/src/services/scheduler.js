@@ -4,6 +4,9 @@ const db = require('../database/db');
 class SchedulerService {
     constructor() {
         this.tasks = [];
+        this.lastScheduledReportTime = null;  // 記錄最後一次定時上報的時間
+        this.reportTime1 = '45 23 * * *';     // 保存設定的上報時間
+        this.reportTime2 = '0 10 * * *';
     }
     
     /**
@@ -15,12 +18,17 @@ class SchedulerService {
             reportTime2 = '0 10 * * *'     // 默認 10:00 倫敦時間
         } = config;
         
+        // 保存設定的上報時間
+        this.reportTime1 = reportTime1;
+        this.reportTime2 = reportTime2;
+        
         console.log('[Scheduler] Starting scheduled tasks...');
         console.log(`[Scheduler] Report time 1: ${reportTime1}`);
         console.log(`[Scheduler] Report time 2: ${reportTime2}`);
         
         // 任務 1：第一個上報時間
         const task1 = cron.schedule(reportTime1, () => {
+            this.lastScheduledReportTime = new Date().toISOString();
             this.requestAllNodesReport('Scheduled report time 1');
         }, {
             timezone: 'Europe/London'
@@ -28,6 +36,7 @@ class SchedulerService {
         
         // 任務 2：第二個上報時間
         const task2 = cron.schedule(reportTime2, () => {
+            this.lastScheduledReportTime = new Date().toISOString();
             this.requestAllNodesReport('Scheduled report time 2');
         }, {
             timezone: 'Europe/London'

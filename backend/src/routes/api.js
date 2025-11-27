@@ -4,6 +4,7 @@ const db = require('../database/db');
 const heartbeatService = require('../services/heartbeat');
 const telegram = require('../services/telegram');
 const snapshotService = require('../services/snapshot');
+const schedulerService = require('../services/scheduler');
 const authMiddleware = require('../middleware/auth');
 
 // POST /api/heartbeat - Receive heartbeat from MT5 EA (requires auth)
@@ -615,46 +616,65 @@ router.get('/snapshot-info', (req, res) => {
         const timezone = process.env.TRADING_TIMEZONE || 'Europe/London';
         const now = new Date();
         
-        // 獲取倫敦時間
-        const londonTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+        // 輔助函數：將時間格式化為倫敦時間字串
+        const formatLondonTime = (date) => {
+            const londonDate = new Date(date.toLocaleString('en-US', { timeZone: timezone }));
+            return `${String(londonDate.getDate()).padStart(2, '0')}/${String(londonDate.getMonth() + 1).padStart(2, '0')} ${String(londonDate.getHours()).padStart(2, '0')}:${String(londonDate.getMinutes()).padStart(2, '0')}`;
+        };
         
-        // 獲取香港時間
-        const hkTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Hong_Kong' }));
+        // 輔助函數：將時間格式化為香港時間字串
+        const formatHKTime = (date) => {
+            const hkDate = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Hong_Kong' }));
+            return `HK ${String(hkDate.getDate()).padStart(2, '0')}/${String(hkDate.getMonth() + 1).padStart(2, '0')} ${String(hkDate.getHours()).padStart(2, '0')}:${String(hkDate.getMinutes()).padStart(2, '0')}`;
+        };
         
-        // 計算下次快照時間（每天倫敦時間 00:30）
-        const nextSnapshot = new Date(londonTime);
-        nextSnapshot.setHours(0, 30, 0, 0);
-        if (londonTime >= nextSnapshot) {
-            nextSnapshot.setDate(nextSnapshot.getDate() + 1);
-        }
+        // 輔助函數：解析 cron 表達式並計算下次執行時間（倫敦時間）
+        const getNextCronTime = (cronExpr) => {
+            // cron 格式: 分 時 日 月 週
+            const parts = cronExpr.split(' ');
+            const minute = parseInt(parts[0]);
+            const hour = parseInt(parts[1]);
+            
+            // 獲取當前倫敦時間
+            const londonNow = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+            
+            // 創建今天的執行時間
+            const todayRun = new Date(londonNow);
+            todayRun.setHours(hour, minute, 0, 0);
+            
+            // 如果今天的執行時間已過，則是明天
+            if (londonNow >= todayRun) {
+                todayRun.setDate(todayRun.getDate() + 1);
+            }
+            
+            return todayRun;
+        };
         
-        // 轉換下次快照時間為 UTC，然後再轉換為各時區
-        const nextSnapshotUTC = new Date(nextSnapshot.toLocaleString('en-US', { timeZone: 'UTC' }));
-        // 由於 nextSnapshot 已經是倫敦時間，我們需要計算對應的 UTC 時間
-        // 簡化處理：直接使用 cron 的下次執行時間
-        const nextSnapshotLondon = `${String(nextSnapshot.getDate()).padStart(2, '0')}/${String(nextSnapshot.getMonth() + 1).padStart(2, '0')} 00:30`;
+        // 從 scheduler 獲取設定的上報時間
+        const reportTime1 = process.env.REPORT_TIME_1 || schedulerService.reportTime1 || '45 23 * * *';
+        const reportTime2 = process.env.REPORT_TIME_2 || schedulerService.reportTime2 || '0 10 * * *';
         
-        // 計算香港時間的下次快照（倫敦 00:30 = 香港 08:30 冬令時 / 07:30 夏令時）
-        const nextSnapshotHK = new Date(nextSnapshot);
-        // 倫敦到香港的時差（冬令時 +8，夏令時 +7）
-        const londonOffset = londonTime.getTimezoneOffset();
-        const hkOffset = hkTime.getTimezoneOffset();
-        nextSnapshotHK.setMinutes(nextSnapshotHK.getMinutes() + (londonOffset - hkOffset));
-        const nextSnapshotHKStr = `HK ${String(nextSnapshotHK.getDate()).padStart(2, '0')}/${String(nextSnapshotHK.getMonth() + 1).padStart(2, '0')} ${String(nextSnapshotHK.getHours()).padStart(2, '0')}:${String(nextSnapshotHK.getMinutes()).padStart(2, '0')}`;
+        // 計算兩個上報時間的下次執行時間
+        const nextTime1 = getNextCronTime(reportTime1);
+        const nextTime2 = getNextCronTime(reportTime2);
         
-        // 獲取最後快照時間（從手動請求或自動快照）
-        let lastSnapshotTime = snapshotService.lastManualRequestTime || null;
+        // 選擇最近的一個
+        const nextReportTime = nextTime1 < nextTime2 ? nextTime1 : nextTime2;
         
-        // 如果有最後快照時間，格式化為倫敦和香港時間
+        // 格式化下次上報時間
+        const nextSnapshotLondon = formatLondonTime(nextReportTime);
+        const nextSnapshotHK = formatHKTime(nextReportTime);
+        
+        // 獲取最後上報時間（優先使用定時上報，其次是手動請求）
+        let lastSnapshotTime = schedulerService.lastScheduledReportTime || snapshotService.lastManualRequestTime || null;
+        
+        // 如果有最後上報時間，格式化為倫敦和香港時間
         let lastSnapshotLondon = null;
         let lastSnapshotHK = null;
         if (lastSnapshotTime) {
             const lastTime = new Date(lastSnapshotTime);
-            const lastLondon = new Date(lastTime.toLocaleString('en-US', { timeZone: timezone }));
-            const lastHK = new Date(lastTime.toLocaleString('en-US', { timeZone: 'Asia/Hong_Kong' }));
-            
-            lastSnapshotLondon = `${String(lastLondon.getDate()).padStart(2, '0')}/${String(lastLondon.getMonth() + 1).padStart(2, '0')} ${String(lastLondon.getHours()).padStart(2, '0')}:${String(lastLondon.getMinutes()).padStart(2, '0')}`;
-            lastSnapshotHK = `HK ${String(lastHK.getDate()).padStart(2, '0')}/${String(lastHK.getMonth() + 1).padStart(2, '0')} ${String(lastHK.getHours()).padStart(2, '0')}:${String(lastHK.getMinutes()).padStart(2, '0')}`;
+            lastSnapshotLondon = formatLondonTime(lastTime);
+            lastSnapshotHK = formatHKTime(lastTime);
         }
         
         // 當前交易日
@@ -670,7 +690,7 @@ router.get('/snapshot-info', (req, res) => {
             } : null,
             nextSnapshot: {
                 london: nextSnapshotLondon,
-                hk: nextSnapshotHKStr
+                hk: nextSnapshotHK
             },
             serverTime: new Date().toISOString()
         });
