@@ -5,6 +5,7 @@ import NodeTable from './components/NodeTable'
 import HistoryView from './components/HistoryView'
 import LoadingSpinner from './components/LoadingSpinner'
 import ErrorAlert from './components/ErrorAlert'
+import LoginPage from './components/LoginPage'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
@@ -23,6 +24,43 @@ function App() {
   const [hiddenNodes, setHiddenNodes] = useState({}) // 暫時隱藏的節點（直到下次心跳）
   const [selectedDate, setSelectedDate] = useState('today') // 'today' or 'yesterday'
   const [snapshotInfo, setSnapshotInfo] = useState(null) // 快照時間信息
+  
+  // 登入狀態
+  const [authChecking, setAuthChecking] = useState(true)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [loginRequired, setLoginRequired] = useState(false)
+  
+  // 檢查登入狀態
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const token = localStorage.getItem('sessionToken')
+        const response = await fetch(`${API_BASE}/auth/check`, {
+          headers: token ? { 'X-Session-Token': token } : {}
+        })
+        const data = await response.json()
+        
+        if (data.ok) {
+          setIsAuthenticated(data.authenticated)
+          setLoginRequired(data.loginRequired)
+        }
+      } catch (err) {
+        console.error('Auth check failed:', err)
+        // 如果檢查失敗，假設不需要登入（向後兼容）
+        setIsAuthenticated(true)
+        setLoginRequired(false)
+      } finally {
+        setAuthChecking(false)
+      }
+    }
+    
+    checkAuth()
+  }, [])
+  
+  // 登入成功回調
+  const handleLoginSuccess = () => {
+    setIsAuthenticated(true)
+  }
 
   // On first load, restore hidden nodes from localStorage so they stay hidden across refresh
   useEffect(() => {
@@ -249,6 +287,20 @@ function App() {
       const commissionRate = n.todayABStats?.commission_per_lot || 0;
       return sum + (lots * commissionRate);
     }, 0)
+  }
+
+  // 正在檢查認證狀態
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-cyber-dark flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    )
+  }
+  
+  // 需要登入但未認證
+  if (loginRequired && !isAuthenticated) {
+    return <LoginPage onLoginSuccess={handleLoginSuccess} />
   }
 
   return (

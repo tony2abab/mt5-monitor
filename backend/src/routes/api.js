@@ -6,6 +6,141 @@ const telegram = require('../services/telegram');
 const snapshotService = require('../services/snapshot');
 const schedulerService = require('../services/scheduler');
 const authMiddleware = require('../middleware/auth');
+const loginService = require('../services/loginService');
+
+// ==================== 登入保護 API ====================
+
+// 獲取客戶端 IP
+function getClientIP(req) {
+    return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+           req.headers['x-real-ip'] || 
+           req.connection?.remoteAddress || 
+           req.ip || 
+           'unknown';
+}
+
+// POST /api/auth/login - 用戶登入
+router.post('/auth/login', (req, res) => {
+    try {
+        const ip = getClientIP(req);
+        const { password } = req.body;
+        const expectedPassword = process.env.WEB_PASSWORD;
+        
+        // 檢查是否配置了密碼
+        if (!expectedPassword) {
+            return res.status(500).json({
+                ok: false,
+                error: 'Server login not configured'
+            });
+        }
+        
+        // 檢查 IP 是否被封鎖
+        const blocked = loginService.isBlocked(ip);
+        if (blocked.blocked) {
+            return res.status(429).json({
+                ok: false,
+                error: `Too many failed attempts. Try again in ${blocked.remainingMinutes} minutes.`,
+                blockedMinutes: blocked.remainingMinutes
+            });
+        }
+        
+        // 驗證密碼
+        if (password !== expectedPassword) {
+            const result = loginService.recordFailedAttempt(ip);
+            return res.status(401).json({
+                ok: false,
+                error: 'Invalid password',
+                attemptsRemaining: result.attemptsRemaining
+            });
+        }
+        
+        // 登入成功
+        const session = loginService.loginSuccess(ip);
+        
+        res.json({
+            ok: true,
+            token: session.token,
+            expiresAt: session.expiresAt,
+            message: 'Login successful'
+        });
+    } catch (error) {
+        console.error('Error in login:', error);
+        res.status(500).json({ ok: false, error: 'Internal server error' });
+    }
+});
+
+// POST /api/auth/logout - 用戶登出
+router.post('/auth/logout', (req, res) => {
+    try {
+        const token = req.headers['x-session-token'];
+        if (token) {
+            loginService.logout(token);
+        }
+        res.json({ ok: true, message: 'Logged out' });
+    } catch (error) {
+        console.error('Error in logout:', error);
+        res.status(500).json({ ok: false, error: 'Internal server error' });
+    }
+});
+
+// GET /api/auth/check - 檢查登入狀態
+router.get('/auth/check', (req, res) => {
+    try {
+        const ip = getClientIP(req);
+        const token = req.headers['x-session-token'];
+        const webLoginEnabled = process.env.WEB_LOGIN_ENABLED === 'true';
+        
+        // 如果未啟用登入保護，直接返回已認證
+        if (!webLoginEnabled) {
+            return res.json({
+                ok: true,
+                authenticated: true,
+                loginRequired: false
+            });
+        }
+        
+        // 檢查 session token
+        if (loginService.isValidSession(token)) {
+            return res.json({
+                ok: true,
+                authenticated: true,
+                loginRequired: true
+            });
+        }
+        
+        // 檢查 IP 是否已信任
+        if (loginService.isTrusted(ip)) {
+            return res.json({
+                ok: true,
+                authenticated: true,
+                trustedIP: true,
+                loginRequired: true
+            });
+        }
+        
+        res.json({
+            ok: true,
+            authenticated: false,
+            loginRequired: true
+        });
+    } catch (error) {
+        console.error('Error in auth check:', error);
+        res.status(500).json({ ok: false, error: 'Internal server error' });
+    }
+});
+
+// GET /api/auth/stats - 獲取登入統計（需要管理員權限）
+router.get('/auth/stats', authMiddleware, (req, res) => {
+    try {
+        const stats = loginService.getStats();
+        res.json({ ok: true, ...stats });
+    } catch (error) {
+        console.error('Error in auth stats:', error);
+        res.status(500).json({ ok: false, error: 'Internal server error' });
+    }
+});
+
+// ==================== MT5 EA API ====================
 
 // POST /api/heartbeat - Receive heartbeat from MT5 EA (requires auth)
 router.post('/heartbeat', authMiddleware, (req, res) => {
