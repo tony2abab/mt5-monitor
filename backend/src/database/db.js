@@ -381,18 +381,36 @@ class DatabaseManager {
     
     // Report request operations
     createReportRequest(nodeId = null) {
-        const stmt = this.db.prepare(`
-            INSERT INTO report_requests (node_id, requested_at)
-            VALUES (?, datetime('now'))
-        `);
-        return stmt.run(nodeId);
+        if (nodeId === null) {
+            // 全局請求：為每個現有節點創建單獨的請求記錄
+            const nodes = this.getAllNodes();
+            const stmt = this.db.prepare(`
+                INSERT INTO report_requests (node_id, requested_at)
+                VALUES (?, datetime('now'))
+            `);
+            
+            let count = 0;
+            for (const node of nodes) {
+                stmt.run(node.id);
+                count++;
+            }
+            console.log(`[DB] Created report requests for ${count} nodes`);
+            return { changes: count };
+        } else {
+            // 單個節點請求
+            const stmt = this.db.prepare(`
+                INSERT INTO report_requests (node_id, requested_at)
+                VALUES (?, datetime('now'))
+            `);
+            return stmt.run(nodeId);
+        }
     }
     
     checkReportRequest(nodeId) {
-        // Check for node-specific or global (NULL) requests
+        // 只檢查該節點的請求（不再支持 NULL 全局請求）
         const stmt = this.db.prepare(`
             SELECT * FROM report_requests 
-            WHERE (node_id = ? OR node_id IS NULL) 
+            WHERE node_id = ?
             AND consumed_at IS NULL
             ORDER BY requested_at DESC
             LIMIT 1
