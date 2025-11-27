@@ -156,11 +156,13 @@ router.post('/ab-stats', authMiddleware, (req, res) => {
         });
         
         // 自動創建/更新當天的快照（讓歷史數據即時可見）
+        // 使用當前交易日期，確保與頂部總表一致
         try {
-            snapshotService.manualSnapshot(date);
-            console.log(`[AB-Stats] Auto-updated snapshot for ${date}`);
+            const currentTradingDate = db.getCurrentTradingDate();
+            snapshotService.manualSnapshot(currentTradingDate);
+            console.log(`[AB-Stats] Auto-updated snapshot for ${currentTradingDate} (MT5 reported date: ${date})`);
         } catch (snapshotError) {
-            console.error(`[AB-Stats] Failed to update snapshot for ${date}:`, snapshotError);
+            console.error(`[AB-Stats] Failed to update snapshot:`, snapshotError);
             // 不影響主要響應
         }
         
