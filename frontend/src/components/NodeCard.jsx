@@ -132,7 +132,7 @@ function NodeCard({ node, onHide }) {
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-gray-400 font-bold min-w-[90px]">回佣:</span>
               <span className="text-[11px] font-medium text-cyan-400 ml-auto">
-                ${(((todayABStats?.a_lots_total || 0) + (todayABStats?.b_lots_total || 0)) * (todayABStats?.commission_per_lot || 0)).toFixed(2)}
+                ${((todayABStats?.a_lots_total || 0) * (todayABStats?.commission_per_lot || 0)).toFixed(2)}
               </span>
             </div>
             
