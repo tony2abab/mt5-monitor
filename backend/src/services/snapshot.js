@@ -109,11 +109,15 @@ class SnapshotService {
      */
     manualSnapshot(dateStr) {
         try {
-            console.log(`[Snapshot] Creating manual snapshot for ${dateStr}`);
+            // 獲取當前交易日期，用於比較
+            const currentTradingDate = db.getCurrentTradingDate();
+            console.log(`[Snapshot] Creating manual snapshot for ${dateStr} (current trading date: ${currentTradingDate})`);
             
             // 根據指定日期獲取數據
             const nodes = db.getAllNodes();
             const todayABStats = db.getAllABStatsByDate(dateStr);
+            
+            console.log(`[Snapshot] Found ${todayABStats.length} AB stats records for ${dateStr}`);
             
             const abStatsMap = {};
             todayABStats.forEach(stat => {
@@ -158,6 +162,8 @@ class SnapshotService {
                 // 平均每手成本 = 總盈虧 / 總手數
                 total_cost_per_lot: total_lots > 0 ? (total_ab_profit / total_lots) : 0
             };
+            
+            console.log(`[Snapshot] Calculated totals - AB Profit: ${total_ab_profit}, A Lots: ${total_a_lots}, B Lots: ${total_b_lots}`);
             
             db.createDailySnapshot({
                 snapshot_date: dateStr,
