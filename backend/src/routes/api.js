@@ -739,4 +739,41 @@ function getRelativeTime(date) {
     return `${diffDay}d ago`;
 }
 
+// GET /api/debug/ab-stats - 調試用：查看當前交易日的原始 AB 統計數據
+router.get('/debug/ab-stats', (req, res) => {
+    try {
+        const currentTradingDate = db.getCurrentTradingDate();
+        const todayABStats = db.getAllTodayABStats();
+        const snapshot = db.getDailySnapshotByDate(currentTradingDate);
+        
+        // 計算總和
+        const calculatedTotal = todayABStats.reduce((sum, stat) => sum + (stat.ab_profit_total || 0), 0);
+        
+        res.json({
+            ok: true,
+            currentTradingDate,
+            statsCount: todayABStats.length,
+            calculatedABProfitTotal: calculatedTotal,
+            snapshotABProfitTotal: snapshot?.total_ab_profit || null,
+            difference: snapshot ? (snapshot.total_ab_profit - calculatedTotal) : null,
+            stats: todayABStats.map(s => ({
+                node_id: s.node_id,
+                date: s.date,
+                ab_profit_total: s.ab_profit_total,
+                a_lots_total: s.a_lots_total,
+                reported_at: s.reported_at
+            })),
+            snapshot: snapshot ? {
+                snapshot_date: snapshot.snapshot_date,
+                total_ab_profit: snapshot.total_ab_profit,
+                total_a_lots: snapshot.total_a_lots,
+                created_at: snapshot.created_at
+            } : null
+        });
+    } catch (error) {
+        console.error('Error in debug/ab-stats:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 module.exports = router;

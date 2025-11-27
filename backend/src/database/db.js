@@ -361,6 +361,14 @@ class DatabaseManager {
         return stmt.all();
     }
     
+    getDailySnapshotByDate(date) {
+        const stmt = this.db.prepare(`
+            SELECT * FROM daily_snapshots 
+            WHERE snapshot_date = ?
+        `);
+        return stmt.get(date);
+    }
+    
     getDailySnapshotsByDateRange(startDate, endDate) {
         const stmt = this.db.prepare(`
             SELECT * FROM daily_snapshots 
