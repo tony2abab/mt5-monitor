@@ -1,0 +1,168 @@
+MT5 EA 修改說明 - 主動上報功能和場上手數
+========================================
+
+修改文件：A計算盈虧_r9a_webmonitor.mq5
+
+修改 1：添加 input 參數（在現有 input 區域）
+-------------------------------------------------------------------
+
+找到：
+input  bool    Print_Heartbeat_Success = false;                 // 是否打印心跳成功日誌
+input  int     Monitor_HeartbeatMinutes = 5;
+
+添加：
+input  bool    Print_Heartbeat_Success = false;                 // 是否打印心跳成功日誌
+
+// 上報模式設定
+input  bool    Report_Mode_OnDemand = true;                     // true=輪詢模式(A), false=定時模式(B)
+input  int     Report_Poll_Seconds = 10;                        // 輪詢間隔(秒)
+
+input  int     Monitor_HeartbeatMinutes = 5;
+
+
+修改 2：添加全局變量（在文件頂部全局變量區域）
+-------------------------------------------------------------------
+
+找到：
+bool     g_firstHeartbeatSuccess = false;
+
+添加：
+bool     g_firstHeartbeatSuccess = false;
+datetime g_lastReportPoll = 0;                                  // 上次輪詢時間
+bool     g_reportRequested = false;                             // 是否收到上報請求
+
+
+修改 3：創建輪詢檢查函數（在 SendMonitorHeartbeat 函數附近）
+-------------------------------------------------------------------
+
+添加新函數：
+
+//+------------------------------------------------------------------+
+//| 檢查是否有上報請求                                                  |
+//+------------------------------------------------------------------+
+void CheckReportRequest()
+{
+   if(!Report_Mode_OnDemand) return;  // 非輪詢模式，不檢查
+   
+   datetime now = TimeCurrent();
+   if(now - g_lastReportPoll < Report_Poll_Seconds) return;  // 未到輪詢時間
+   
+   g_lastReportPoll = now;
+   
+   // 調用 API 檢查是否有上報請求
+   string url = Monitor_API_URL + "/api/report-request?id=" + Monitor_Node_ID;
+   
+   char post[], result[];
+   string headers = "Authorization: Bearer " + Monitor_API_Key + "\r\n";
+   
+   int res = WebRequest("GET", url, headers, 5000, post, result, headers);
+   
+   if(res == 200)
+   {
+      string response = CharArrayToString(result);
+      
+      // 解析 JSON 回應 {"requested": true/false}
+      if(StringFind(response, "\"requested\":true") >= 0 || 
+         StringFind(response, "\"requested\": true") >= 0)
+      {
+         Print("✓ 收到上報請求，準備發送數據");
+         g_reportRequested = true;
+      }
+   }
+}
+
+
+修改 4：修改 OnTick 函數，添加輪詢檢查
+-------------------------------------------------------------------
+
+在 OnTick() 函數中，找到心跳檢查的位置，添加輪詢檢查：
+
+void OnTick()
+{
+   // ... 現有代碼 ...
+   
+   // 心跳檢查
+   SendMonitorHeartbeat();
+   
+   // 添加這一行：檢查上報請求
+   CheckReportRequest();
+   
+   // ... 現有代碼 ...
+}
+
+
+修改 5：修改數據發送邏輯（在發送統計數據的函數中）
+-------------------------------------------------------------------
+
+找到發送統計數據的條件判斷（通常是檢查時間的地方），修改為：
+
+原來可能是：
+if(/* 到達設定時間 */)
+{
+   // 發送數據
+}
+
+改為：
+bool shouldSendData = false;
+
+// 模式 A：輪詢模式 - 收到請求時發送
+if(Report_Mode_OnDemand && g_reportRequested)
+{
+   shouldSendData = true;
+   g_reportRequested = false;  // 重置標記
+   Print("輪詢模式：響應上報請求");
+}
+// 模式 B：定時模式 - 到達設定時間發送
+else if(!Report_Mode_OnDemand && /* 原來的時間檢查條件 */)
+{
+   shouldSendData = true;
+   Print("定時模式：到達設定時間");
+}
+
+if(shouldSendData)
+{
+   // 發送數據的代碼
+}
+
+
+修改 6：添加場上手數計算和發送
+-------------------------------------------------------------------
+
+在計算統計數據的地方，添加場上手數計算：
+
+// 計算場上手數（當前未平倉的總手數）
+double open_lots = 0;
+for(int i = PositionsTotal() - 1; i >= 0; i--)
+{
+   if(PositionSelectByTicket(PositionGetTicket(i)))
+   {
+      open_lots += PositionGetDouble(POSITION_VOLUME);
+   }
+}
+
+在發送數據的 JSON payload 中添加：
+
+string payload = "{"
+   + "\"id\":\"" + Monitor_Node_ID + "\","
+   + "\"date\":\"" + date + "\","
+   + "\"a_lots_total\":" + DoubleToString(a_lots, 2) + ","
+   + "\"b_lots_total\":" + DoubleToString(b_lots, 2) + ","
+   + "\"lots_diff\":" + DoubleToString(lots_diff, 2) + ","
+   + "\"a_profit_total\":" + DoubleToString(a_profit, 2) + ","
+   + "\"b_profit_total\":" + DoubleToString(b_profit, 2) + ","
+   + "\"ab_profit_total\":" + DoubleToString(ab_profit, 2) + ","
+   + "\"a_interest_total\":" + DoubleToString(a_interest, 2) + ","
+   + "\"cost_per_lot\":" + DoubleToString(cost_per_lot, 2) + ","
+   + "\"commission_per_lot\":" + DoubleToString(Commission_Per_Lot, 2) + ","
+   + "\"open_lots\":" + DoubleToString(open_lots, 2)  // ← 添加這一行
+   + "}";
+
+
+修改總結：
+-------------------------------------------------------------------
+1. 添加 2 個 input 參數：Report_Mode_OnDemand, Report_Poll_Seconds
+2. 添加 2 個全局變量：g_lastReportPoll, g_reportRequested
+3. 創建 CheckReportRequest() 函數
+4. 在 OnTick() 中調用 CheckReportRequest()
+5. 修改數據發送邏輯，支持兩種模式
+6. 添加場上手數計算和發送

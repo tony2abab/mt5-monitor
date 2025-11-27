@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d4ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0080ff;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="url(#grad)" stroke="#001a33" stroke-width="2"/>
+  
+  <!-- MT5 text -->
+  <text x="50" y="40" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#ffffff" text-anchor="middle">MT5</text>
+  
+  <!-- Monitor icon -->
+  <rect x="30" y="55" width="40" height="25" rx="2" fill="none" stroke="#ffffff" stroke-width="2"/>
+  <line x1="45" y1="80" x2="45" y2="85" stroke="#ffffff" stroke-width="2"/>
+  <line x1="55" y1="80" x2="55" y2="85" stroke="#ffffff" stroke-width="2"/>
+  <line x1="38" y1="85" x2="62" y2="85" stroke="#ffffff" stroke-width="2"/>
+  
+  <!-- Activity indicator -->
+  <circle cx="50" cy="67" r="3" fill="#00ff88"/>
+</svg>

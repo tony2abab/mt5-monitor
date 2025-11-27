@@ -9,6 +9,8 @@ const authMiddleware = require('./middleware/auth');
 const auditMiddleware = require('./middleware/audit');
 const apiRoutes = require('./routes/api');
 const heartbeatService = require('./services/heartbeat');
+const snapshotService = require('./services/snapshot');
+const schedulerService = require('./services/scheduler');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -49,6 +51,15 @@ app.get('/health', (req, res) => {
 // Mount all routes at /api, authentication is applied per-route in the router
 app.use('/api', apiRoutes);
 
+// Serve static files from frontend dist folder
+const frontendPath = path.join(__dirname, '../../frontend/dist');
+app.use(express.static(frontendPath));
+
+// SPA fallback - serve index.html for all non-API routes
+app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendPath, 'index.html'));
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error('Unhandled error:', err);
@@ -58,21 +69,25 @@ app.use((err, req, res, next) => {
     });
 });
 
-// 404 handler
-app.use((req, res) => {
-    res.status(404).json({
-        ok: false,
-        error: 'Endpoint not found'
-    });
-});
-
 // Start heartbeat monitoring service
 heartbeatService.start();
+
+// Start daily snapshot service
+snapshotService.start();
+
+// Start scheduler service
+const schedulerConfig = {
+    reportTime1: process.env.REPORT_TIME_1 || '45 23 * * *',  // 23:45
+    reportTime2: process.env.REPORT_TIME_2 || '0 10 * * *'    // 10:00
+};
+schedulerService.start(schedulerConfig);
 
 // Graceful shutdown
 process.on('SIGINT', () => {
     console.log('\nShutting down gracefully...');
     heartbeatService.stop();
+    snapshotService.stop();
+    schedulerService.stop();
     process.exit(0);
 });
 

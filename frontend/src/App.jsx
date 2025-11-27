@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Header from './components/Header'
 import NodeCard from './components/NodeCard'
 import NodeTable from './components/NodeTable'
+import HistoryView from './components/HistoryView'
 import LoadingSpinner from './components/LoadingSpinner'
 import ErrorAlert from './components/ErrorAlert'
 
@@ -12,6 +13,7 @@ function App() {
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [currentPage, setCurrentPage] = useState('monitor') // 'monitor' or 'history'
   const [viewMode, setViewMode] = useState('grid') // 'grid' or 'table'
   const [sortBy, setSortBy] = useState('name') // 'name', 'profit', 'lots', 'status'
   const [filterText, setFilterText] = useState('')
@@ -19,6 +21,8 @@ function App() {
   const [hideInactive, setHideInactive] = useState(false) // 隱藏不活躍節點
   const [inactiveHours, setInactiveHours] = useState(24) // 多久算不活躍（小時）
   const [hiddenNodes, setHiddenNodes] = useState({}) // 暫時隱藏的節點（直到下次心跳）
+  const [selectedDate, setSelectedDate] = useState('today') // 'today' or 'yesterday'
+  const [snapshotInfo, setSnapshotInfo] = useState(null) // 快照時間信息
 
   // On first load, restore hidden nodes from localStorage so they stay hidden across refresh
   useEffect(() => {
@@ -63,9 +67,14 @@ function App() {
     return `${diffDay} 天前`
   }
 
-  const fetchNodes = useCallback(async () => {
+  const fetchNodes = useCallback(async (dateOverride = null) => {
     try {
-      const response = await fetch(`${API_BASE}/nodes`)
+      const dateParam = dateOverride || selectedDate
+      const url = dateParam === 'today' 
+        ? `${API_BASE}/nodes`
+        : `${API_BASE}/nodes-by-date?date=${dateParam}`
+      
+      const response = await fetch(url)
       if (!response.ok) throw new Error('Failed to fetch nodes')
       
       const data = await response.json()
@@ -94,6 +103,21 @@ function App() {
     } finally {
       setLoading(false)
     }
+  }, [selectedDate])
+
+  // 獲取快照時間信息
+  const fetchSnapshotInfo = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/snapshot-info`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.ok) {
+          setSnapshotInfo(data)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch snapshot info:', err)
+    }
   }, [])
 
   const handleManualRefresh = useCallback(async () => {
@@ -113,24 +137,54 @@ function App() {
 
   useEffect(() => {
     fetchNodes()
+    fetchSnapshotInfo()
     
     let interval
+    let snapshotInterval
     if (autoRefresh) {
       interval = setInterval(fetchNodes, 10000) // Refresh every 10 seconds
+      snapshotInterval = setInterval(fetchSnapshotInfo, 30000) // Refresh snapshot info every 30 seconds
     }
     
     return () => {
       if (interval) clearInterval(interval)
+      if (snapshotInterval) clearInterval(snapshotInterval)
     }
-  }, [fetchNodes, autoRefresh])
+  }, [fetchNodes, fetchSnapshotInfo, autoRefresh])
+
+  // 當選擇日期改變時重新獲取數據
+  useEffect(() => {
+    fetchNodes()
+  }, [selectedDate])
 
   // Filter and sort nodes
   const processedNodes = nodes
     .filter(node => {
-      // 自動解除：如果節點有新心跳，從隱藏清單移除
-      const hiddenAt = hiddenNodes[node.id]
-      if (hiddenAt !== undefined) {
-        if (node.last_heartbeat !== hiddenAt) {
+      // 自動解除：如果節點有新心跳或新數據，從隱藏清單移除
+      const hiddenInfo = hiddenNodes[node.id]
+      if (hiddenInfo !== undefined) {
+        // 檢查心跳時間或統計數據時間是否有更新
+        const currentHeartbeat = node.last_heartbeat
+        const currentStatsTime = node.todayABStats?.reported_at || 
+                                 node.todayStats?.reported_at || 
+                                 node.last_ab_stats_at || 
+                                 node.last_stats_at
+        
+        // 如果是舊格式（只存時間字串），轉換為新格式
+        let storedHeartbeat, storedStatsTime
+        if (typeof hiddenInfo === 'string') {
+          storedHeartbeat = hiddenInfo
+          storedStatsTime = null
+        } else {
+          storedHeartbeat = hiddenInfo.heartbeat
+          storedStatsTime = hiddenInfo.statsTime
+        }
+        
+        // 如果心跳或統計時間有變化，解除隱藏
+        const heartbeatChanged = currentHeartbeat !== storedHeartbeat
+        const statsChanged = currentStatsTime && currentStatsTime !== storedStatsTime
+        
+        if (heartbeatChanged || statsChanged) {
           const updated = { ...hiddenNodes }
           delete updated[node.id]
           setHiddenNodes(updated)
@@ -180,6 +234,22 @@ function App() {
       }
     })
 
+  // 重新計算 summary，只統計顯示中的節點
+  const displaySummary = {
+    total: processedNodes.length,
+    online: processedNodes.filter(n => n.status === 'online').length,
+    offline: processedNodes.filter(n => n.status === 'offline').length,
+    totalABProfit: processedNodes.reduce((sum, n) => sum + (n.todayABStats?.ab_profit_total || 0), 0),
+    totalALots: processedNodes.reduce((sum, n) => sum + (n.todayABStats?.a_lots_total || 0), 0),
+    totalBLots: processedNodes.reduce((sum, n) => sum + (n.todayABStats?.b_lots_total || 0), 0),
+    totalAInterest: processedNodes.reduce((sum, n) => sum + (n.todayABStats?.a_interest_total || 0), 0),
+    totalCommission: processedNodes.reduce((sum, n) => {
+      const lots = (n.todayABStats?.a_lots_total || 0) + (n.todayABStats?.b_lots_total || 0);
+      const commissionRate = n.todayABStats?.commission_per_lot || 0;
+      return sum + (lots * commissionRate);
+    }, 0)
+  }
+
   return (
     <div className="min-h-screen bg-cyber-dark">
       {/* Background effects */}
@@ -190,16 +260,55 @@ function App() {
 
       <div className="relative z-10">
         <Header 
-          summary={summary} 
+          summary={displaySummary} 
           autoRefresh={autoRefresh}
           onToggleRefresh={() => setAutoRefresh(!autoRefresh)}
           onRefresh={handleManualRefresh}
+          onRequestReport={fetchSnapshotInfo}
         />
 
         <main className="container mx-auto px-4 py-8">
-          {/* Controls */}
-          <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-            <div className="flex flex-wrap gap-3">
+          {/* Snapshot Time Info */}
+          {currentPage === 'monitor' && snapshotInfo && (
+            <div className="mb-2 text-sm text-white">
+              <span>
+                最後上報: {snapshotInfo.lastSnapshot 
+                  ? `${snapshotInfo.lastSnapshot.london} (${snapshotInfo.lastSnapshot.hk})`
+                  : '尚無記錄'
+                }
+                {' | '}
+                下次快照: {snapshotInfo.nextSnapshot.london} ({snapshotInfo.nextSnapshot.hk})
+              </span>
+            </div>
+          )}
+
+          {/* Monitor Page Controls - Combined Navigation and View Controls */}
+          {currentPage === 'monitor' && (
+            <div className="mb-6 flex flex-wrap gap-3 items-center">
+              {/* Page Navigation */}
+              <div className="flex gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-blue/20">
+                <button
+                  onClick={() => setCurrentPage('monitor')}
+                  className={`px-6 py-2 rounded transition-all ${
+                    currentPage === 'monitor' 
+                      ? 'bg-cyber-blue/20 text-cyber-blue font-semibold' 
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  即時監控
+                </button>
+                <button
+                  onClick={() => setCurrentPage('history')}
+                  className={`px-6 py-2 rounded transition-all ${
+                    currentPage === 'history' 
+                      ? 'bg-cyber-blue/20 text-cyber-blue font-semibold' 
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  歷史數據
+                </button>
+              </div>
+
               {/* View mode toggle */}
               <div className="flex gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-blue/20">
                 <button
@@ -264,19 +373,18 @@ function App() {
                   <option value="168">7天</option>
                 </select>
               )}
-            </div>
 
-            {/* Search filter */}
-            <input
-              type="text"
-              placeholder="搜尋節點..."
-              value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-              className="w-full sm:w-64 px-4 py-2 bg-cyber-darker border border-cyber-blue/20 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:border-cyber-blue/60"
-            />
+              {/* Search filter */}
+              <input
+                type="text"
+                placeholder="搜尋節點..."
+                value={filterText}
+                onChange={(e) => setFilterText(e.target.value)}
+                className="w-full sm:w-64 px-4 py-2 bg-cyber-darker border border-cyber-blue/20 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:border-cyber-blue/60"
+              />
 
-            {/* Clear stats button */}
-            <button
+              {/* Clear stats button */}
+              <button
               onClick={async () => {
                 try {
                   const res = await fetch(`${API_BASE}/nodes/clear-stats`, { method: 'POST' })
@@ -291,16 +399,70 @@ function App() {
             >
               清除所有統計數據
             </button>
-          </div>
 
-          {/* Error display */}
-          {error && <ErrorAlert message={error} onClose={() => setError(null)} />}
+            {/* Date selector - Today/Yesterday */}
+            <div className="flex gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-blue/20">
+              <button
+                onClick={() => setSelectedDate('today')}
+                className={`px-4 py-2 rounded transition-all ${
+                  selectedDate === 'today' 
+                    ? 'bg-cyber-green/20 text-cyber-green font-semibold' 
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                今天
+              </button>
+              <button
+                onClick={() => setSelectedDate('yesterday')}
+                className={`px-4 py-2 rounded transition-all ${
+                  selectedDate === 'yesterday' 
+                    ? 'bg-cyber-green/20 text-cyber-green font-semibold' 
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                昨天
+              </button>
+            </div>
+            </div>
+          )}
 
-          {/* Loading state */}
-          {loading && <LoadingSpinner />}
+          {/* History Page Navigation */}
+          {currentPage === 'history' && (
+            <div className="mb-6 flex gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-blue/20 w-fit">
+              <button
+                onClick={() => setCurrentPage('monitor')}
+                className={`px-6 py-2 rounded transition-all ${
+                  currentPage === 'monitor' 
+                    ? 'bg-cyber-blue/20 text-cyber-blue font-semibold' 
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                即時監控
+              </button>
+              <button
+                onClick={() => setCurrentPage('history')}
+                className={`px-6 py-2 rounded transition-all ${
+                  currentPage === 'history' 
+                    ? 'bg-cyber-blue/20 text-cyber-blue font-semibold' 
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                歷史數據
+              </button>
+            </div>
+          )}
 
-          {/* Nodes display */}
-          {!loading && processedNodes.length === 0 && (
+          {/* Monitor Page Content */}
+          {currentPage === 'monitor' && (
+            <>
+              {/* Error display */}
+              {error && <ErrorAlert message={error} onClose={() => setError(null)} />}
+
+              {/* Loading state */}
+              {loading && <LoadingSpinner />}
+
+              {/* Nodes display */}
+              {!loading && processedNodes.length === 0 && (
             <div className="text-center py-16">
               <div className="text-gray-400 text-lg mb-2">
                 {filterText ? '無符合的節點' : '尚無節點資料'}
@@ -313,17 +475,25 @@ function App() {
 
           {!loading && processedNodes.length > 0 && (
             viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
                 {processedNodes.map((node) => (
                   <NodeCard
                     key={node.id}
                     node={node}
                     onHide={async () => {
-                      // 前端隱藏：直到下一次心跳前都不顯示
+                      // 前端隱藏：保存當前心跳和統計時間，直到有新心跳或新數據才重新顯示
                       setHiddenNodes(prev => {
+                        const currentStatsTime = node.todayABStats?.reported_at || 
+                                                 node.todayStats?.reported_at || 
+                                                 node.last_ab_stats_at || 
+                                                 node.last_stats_at
+                        
                         const updated = {
                           ...prev,
-                          [node.id]: node.last_heartbeat || null
+                          [node.id]: {
+                            heartbeat: node.last_heartbeat || null,
+                            statsTime: currentStatsTime || null
+                          }
                         }
                         try {
                           localStorage.setItem('mt5_hidden_nodes', JSON.stringify(updated))
@@ -351,6 +521,13 @@ function App() {
             ) : (
               <NodeTable nodes={processedNodes} />
             )
+          )}
+            </>
+          )}
+
+          {/* History Page Content */}
+          {currentPage === 'history' && (
+            <HistoryView />
           )}
         </main>
 

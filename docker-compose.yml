@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build:
@@ -10,14 +8,14 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - NODE_ENV=production
-      - PORT=8080
-      - API_KEY=secret_key_2025_9093942525abcdxyz_
-      - TELEGRAM_BOT_TOKEN=6492162382:AAEKsQWDUXc7cJw0pS1z_lqsHZ6HIFLpjpw
-      - TELEGRAM_CHAT_ID=1942176657
-      - NOTIFY_ON_RECOVERY=true
-      - NOTIFY_OFFLINE=true
-      - HEARTBEAT_TIMEOUT_SECONDS=60
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${PORT:-8080}
+      - API_KEY=${API_KEY:-secret_key_2025_9093942525abcdxyz_}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - NOTIFY_ON_RECOVERY=${NOTIFY_ON_RECOVERY:-true}
+      - NOTIFY_OFFLINE=${NOTIFY_OFFLINE:-true}
+      - HEARTBEAT_TIMEOUT_SECONDS=${HEARTBEAT_TIMEOUT_SECONDS:-900}
       - RATE_LIMIT_PER_MIN=${RATE_LIMIT_PER_MIN:-60}
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
       - ENABLE_AUTH=${ENABLE_AUTH:-true}

@@ -1,0 +1,77 @@
+MT5 EA 修改說明 - 添加心跳日誌開關
+========================================
+
+修改文件：A計算盈虧_r9a_webmonitor.mq5
+
+修改 1：添加 input 參數（約在第 31 行附近，Commission_Per_Lot 後面）
+-------------------------------------------------------------------
+
+找到：
+input  double  Commission_Per_Lot    = 2.0;                     // 每手回佣
+
+input  int     Monitor_HeartbeatMinutes = 5;
+
+改為：
+input  double  Commission_Per_Lot    = 2.0;                     // 每手回佣
+input  bool    Print_Heartbeat_Success = false;                 // 是否打印心跳成功日誌
+
+input  int     Monitor_HeartbeatMinutes = 5;
+
+
+修改 2：添加全局變量（⚠️ 重要：必須在文件頂部聲明）
+-------------------------------------------------------------------
+
+在文件頂部，找到其他全局變量（例如 g_lastMonitorHeartbeat, g_dataSentToday 等），
+在它們附近添加：
+
+bool g_firstHeartbeatSuccess = false;  // 記錄是否已經打印過第一次心跳成功
+
+例如：
+datetime g_lastMonitorHeartbeat = 0;
+bool     g_dataSentToday = false;
+bool     g_firstHeartbeatSuccess = false;  // ← 添加這一行
+
+
+修改 3：修改心跳成功日誌邏輯（搜索 "網頁監控心跳成功"）
+-------------------------------------------------------------------
+
+找到：
+   if(res == 200 || res == 201)
+   {
+      g_lastMonitorHeartbeat = TimeCurrent();
+      Print("✓ 網頁監控心跳成功");
+   }
+   else
+   {
+      int err = GetLastError();
+      Print("✗ 監控心跳失敗 HTTP:", res, " Error:", err);
+      if(err == 4014)
+         Print("  請將網址加入白名單: ", Monitor_API_URL);
+   }
+
+改為：
+   if(res == 200 || res == 201)
+   {
+      g_lastMonitorHeartbeat = TimeCurrent();
+      // 只在第一次成功或開啟日誌時打印
+      if(!g_firstHeartbeatSuccess || Print_Heartbeat_Success)
+      {
+         Print("✓ 網頁監控心跳成功");
+         g_firstHeartbeatSuccess = true;
+      }
+   }
+   else
+   {
+      int err = GetLastError();
+      Print("✗ 監控心跳失敗 HTTP:", res, " Error:", err);
+      if(err == 4014)
+         Print("  請將網址加入白名單: ", Monitor_API_URL);
+   }
+
+
+說明：
+- 添加了一個新的全局變量 g_firstHeartbeatSuccess 來記錄是否已打印過第一次成功
+- 添加了一個新的 input 參數 Print_Heartbeat_Success，默認為 false（關閉）
+- 當關閉時，只在第一次心跳成功時打印日誌，之後不再打印
+- 當開啟時，每次心跳成功都會打印日誌
+- 這樣可以減少日誌輸出，同時保留第一次成功的提示

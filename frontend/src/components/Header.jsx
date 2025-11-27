@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-function Header({ summary, autoRefresh, onToggleRefresh, onRefresh }) {
+function Header({ summary, autoRefresh, onToggleRefresh, onRefresh, onRequestReport }) {
   const [currentTime, setCurrentTime] = useState(new Date())
 
   useEffect(() => {
@@ -33,49 +33,65 @@ function Header({ summary, autoRefresh, onToggleRefresh, onRefresh }) {
 
           {/* Summary stats */}
           {summary && (
-            <div className="flex flex-wrap gap-4 lg:gap-6">
-              <div className="cyber-border px-4 py-3 rounded-lg bg-cyber-darker/50 backdrop-blur">
-                <div className="text-xs text-gray-400 mb-1">總節點</div>
-                <div className="text-2xl font-bold text-white">{summary.total}</div>
+            <div className="flex flex-wrap gap-2">
+              <div className="cyber-border px-3 py-2 rounded-lg bg-cyber-darker/50 backdrop-blur">
+                <div className="text-[10px] text-gray-400 mb-0.5">總節點</div>
+                <div className="text-lg font-bold text-white">{summary.total}</div>
               </div>
               
-              <div className="cyber-border px-4 py-3 rounded-lg bg-cyber-darker/50 backdrop-blur">
-                <div className="text-xs text-gray-400 mb-1">在線</div>
-                <div className="text-2xl font-bold text-cyber-green">{summary.online}</div>
+              <div className="cyber-border px-3 py-2 rounded-lg bg-cyber-darker/50 backdrop-blur">
+                <div className="text-[10px] text-gray-400 mb-0.5">在線</div>
+                <div className="text-lg font-bold text-cyber-green">{summary.online}</div>
               </div>
               
-              <div className="cyber-border px-4 py-3 rounded-lg bg-cyber-darker/50 backdrop-blur">
-                <div className="text-xs text-gray-400 mb-1">離線</div>
-                <div className="text-2xl font-bold text-red-400">{summary.offline}</div>
+              <div className="cyber-border px-3 py-2 rounded-lg bg-cyber-darker/50 backdrop-blur">
+                <div className="text-[10px] text-gray-400 mb-0.5">離線</div>
+                <div className="text-lg font-bold text-red-400">{summary.offline}</div>
               </div>
               
-              <div className="cyber-border px-4 py-3 rounded-lg bg-cyber-darker/50 backdrop-blur">
-                <div className="text-xs text-gray-400 mb-1">AB總盈虧</div>
-                <div className={`text-2xl font-bold ${
+              <div className="cyber-border px-3 py-2 rounded-lg bg-cyber-darker/50 backdrop-blur">
+                <div className="text-[10px] text-gray-400 mb-0.5">AB總盈虧</div>
+                <div className={`text-lg font-bold ${
                   (summary.totalABProfit ?? 0) >= 0 ? 'text-cyber-green' : 'text-red-400'
                 }`}>
                   {(summary.totalABProfit ?? 0) >= 0 ? '+' : ''}${(summary.totalABProfit ?? 0).toFixed(2)}
                 </div>
               </div>
               
-              <div className="cyber-border px-4 py-3 rounded-lg bg-cyber-darker/50 backdrop-blur">
-                <div className="text-xs text-gray-400 mb-1">A總手數</div>
-                <div className="text-2xl font-bold text-cyan-400">
+              <div className="cyber-border px-3 py-2 rounded-lg bg-cyber-darker/50 backdrop-blur">
+                <div className="text-[10px] text-gray-400 mb-0.5">A總手數</div>
+                <div className="text-lg font-bold text-cyan-400">
                   {(summary.totalALots ?? 0).toFixed(2)}
                 </div>
               </div>
               
-              <div className="cyber-border px-4 py-3 rounded-lg bg-cyber-darker/50 backdrop-blur">
-                <div className="text-xs text-gray-400 mb-1">B總手數</div>
-                <div className="text-2xl font-bold text-cyan-400">
+              <div className="cyber-border px-3 py-2 rounded-lg bg-cyber-darker/50 backdrop-blur">
+                <div className="text-[10px] text-gray-400 mb-0.5">B總手數</div>
+                <div className="text-lg font-bold text-cyan-400">
                   {(summary.totalBLots ?? 0).toFixed(2)}
                 </div>
               </div>
 
-              <div className="cyber-border px-4 py-3 rounded-lg bg-cyber-darker/50 backdrop-blur">
-                <div className="text-xs text-gray-400 mb-1">A總息</div>
-                <div className="text-2xl font-bold text-cyan-400">
+              <div className="cyber-border px-3 py-2 rounded-lg bg-cyber-darker/50 backdrop-blur">
+                <div className="text-[10px] text-gray-400 mb-0.5">A總息</div>
+                <div className="text-lg font-bold text-cyan-400">
                   {(summary.totalAInterest ?? 0).toFixed(2)}
+                </div>
+              </div>
+
+              <div className="cyber-border px-3 py-2 rounded-lg bg-cyber-darker/50 backdrop-blur">
+                <div className="text-[10px] text-gray-400 mb-0.5">總回佣</div>
+                <div className="text-lg font-bold text-cyan-400">
+                  ${(summary.totalCommission ?? 0).toFixed(2)}
+                </div>
+              </div>
+
+              <div className="cyber-border px-3 py-2 rounded-lg bg-cyber-darker/50 backdrop-blur">
+                <div className="text-[10px] text-gray-400 mb-0.5">總盈含息佣</div>
+                <div className={`text-lg font-bold ${
+                  ((summary.totalABProfit ?? 0) + (summary.totalAInterest ?? 0) + (summary.totalCommission ?? 0)) >= 0 ? 'text-cyber-green' : 'text-red-400'
+                }`}>
+                  {((summary.totalABProfit ?? 0) + (summary.totalAInterest ?? 0) + (summary.totalCommission ?? 0)) >= 0 ? '+' : ''}${((summary.totalABProfit ?? 0) + (summary.totalAInterest ?? 0) + (summary.totalCommission ?? 0)).toFixed(2)}
                 </div>
               </div>
             </div>
@@ -88,6 +104,32 @@ function Header({ summary, autoRefresh, onToggleRefresh, onRefresh }) {
               className="px-4 py-2 bg-cyber-blue/20 hover:bg-cyber-blue/30 border border-cyber-blue/50 text-cyber-blue rounded-lg transition-all hover:cyber-glow"
             >
               刷新
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  const response = await fetch('/api/request-report', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                  });
+                  const data = await response.json();
+                  if (data.ok) {
+                    alert('✓ 已發送上報請求給所有MT5');
+                    // 通知父組件刷新快照信息
+                    if (onRequestReport) {
+                      onRequestReport();
+                    }
+                  } else {
+                    alert('✗ 發送失敗：' + data.error);
+                  }
+                } catch (err) {
+                  alert('✗ 網絡錯誤：' + err.message);
+                }
+              }}
+              className="px-4 py-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-500/50 text-yellow-400 rounded-lg transition-all hover:shadow-lg hover:shadow-yellow-500/20"
+            >
+              要求MT5上報數據
             </button>
             <button
               onClick={onToggleRefresh}

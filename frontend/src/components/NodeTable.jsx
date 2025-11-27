@@ -15,6 +15,7 @@ function NodeTable({ nodes }) {
             <th className="text-right p-4 text-sm font-semibold text-cyber-blue">B盈利</th>
             <th className="text-right p-4 text-sm font-semibold text-cyber-blue">AB總盈虧</th>
             <th className="text-right p-4 text-sm font-semibold text-cyber-blue">A總息</th>
+            <th className="text-right p-4 text-sm font-semibold text-cyber-blue">場上手數</th>
             <th className="text-right p-4 text-sm font-semibold text-cyber-blue">每手成本</th>
             <th className="text-right p-4 text-sm font-semibold text-cyber-blue">最後心跳</th>
           </tr>
@@ -98,6 +99,13 @@ function NodeTable({ nodes }) {
                 {/* A總息 */}
                 <td className="p-4 text-right text-sm text-gray-300">
                   {abStats ? (abStats.a_interest_total ?? 0).toFixed(2) : '-'}
+                </td>
+
+                {/* 場上手數 */}
+                <td className={`p-4 text-right text-sm font-medium ${
+                  (abStats?.open_lots ?? 0) === 0 ? 'text-gray-200' : 'text-orange-400'
+                }`}>
+                  {abStats ? (abStats.open_lots ?? 0).toFixed(2) : '-'}
                 </td>
 
                 {/* 每手成本 */}

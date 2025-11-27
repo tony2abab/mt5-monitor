@@ -1,0 +1,32 @@
+MT5 Monitor 部署包
+
+=== 部署步驟 ===
+
+1. 將此文件夾複製到 VPS
+
+2. 在 VPS 上執行以下命令：
+
+   # 停止服務
+   pm2 stop mt5-monitor-backend
+
+   # 備份舊文件
+   Copy-Item C:\MT5_Monitor\mt5-monitor\backend\src\services\heartbeat.js C:\MT5_Monitor\backup_heartbeat.js
+
+   # 複製新文件
+   Copy-Item .\backend\src\services\heartbeat.js C:\MT5_Monitor\mt5-monitor\backend\src\services\heartbeat.js -Force
+
+   # 重啟服務
+   pm2 restart mt5-monitor-backend
+
+   # 查看日誌
+   pm2 logs mt5-monitor-backend
+
+=== 本次修改內容 ===
+
+- 修改收市時段從 23:55-01:30 改為 23:50-01:15
+- 文件: backend/src/services/heartbeat.js
+
+=== 只需複製的文件 ===
+
+backend\src\services\heartbeat.js
+
