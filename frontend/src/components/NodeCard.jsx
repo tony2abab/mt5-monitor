@@ -29,39 +29,31 @@ function NodeCard({ node, onHide }) {
 
       {/* Header */}
       <div className="mb-2">
-        <h3 className="text-sm font-bold text-white mb-0.5 pr-8 truncate">{name}</h3>
-        <p className="text-[10px] text-gray-500 font-mono truncate">ID: {id}</p>
+        <h3 className="text-base font-bold text-white mb-0.5 pr-8 truncate">{name}</h3>
+        <p className="text-xs text-gray-500 font-mono truncate">ID: {id}</p>
       </div>
 
-      {/* Broker & Account */}
-      <div className="mb-2 space-y-0.5">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-gray-400 font-bold">經紀商:</span>
-          <span className="text-[11px] text-gray-300 truncate max-w-[120px]" title={broker || 'N/A'}>{broker || 'N/A'}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-gray-400 font-bold">帳號:</span>
-          <span className="text-[11px] text-gray-300">{account || 'N/A'}</span>
-        </div>
-        {meta?.symbols && meta.symbols.length > 0 && (
+      {/* 交易對（如有） */}
+      {meta?.symbols && meta.symbols.length > 0 && (
+        <div className="mb-2">
           <div className="flex items-start gap-1.5">
-            <span className="text-[10px] text-gray-400 font-bold">交易對:</span>
-            <span className="text-[11px] text-gray-300 truncate">{meta.symbols.join(', ')}</span>
+            <span className="text-xs text-gray-400 font-bold">交易對:</span>
+            <span className="text-xs text-gray-300 truncate">{meta.symbols.join(', ')}</span>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Heartbeat */}
       <div className="mb-2 pb-2 border-b border-gray-700/50 space-y-0.5">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-gray-400 font-bold min-w-[60px]">最後心跳:</span>
-          <span className={`text-[11px] font-medium ml-auto ${isOnline ? 'text-cyber-green' : 'text-red-400'}`}>
+          <span className="text-xs text-gray-400 font-bold min-w-[60px]">最後心跳:</span>
+          <span className={`text-xs font-medium ml-auto ${isOnline ? 'text-cyber-green' : 'text-red-400'}`}>
             {lastHeartbeatRelative}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-gray-400 font-bold min-w-[60px]">最後統計:</span>
-          <span className="text-[10px] text-gray-300 ml-auto">
+          <span className="text-xs text-gray-400 font-bold min-w-[60px]">最後統計:</span>
+          <span className="text-xs text-gray-300 ml-auto">
             {lastStatsRelative || '尚未收到'}
           </span>
         </div>
@@ -73,22 +65,22 @@ function NodeCard({ node, onHide }) {
           // 顯示 A/B 系統統計（新格式）
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-400 font-bold min-w-[90px]">A手數總數:</span>
-              <span className="text-[11px] font-medium text-cyan-400 ml-auto">
+              <span className="text-xs text-gray-400 font-bold min-w-[90px]">A手數總數:</span>
+              <span className="text-xs font-medium text-cyan-400 ml-auto">
                 {(todayABStats?.a_lots_total ?? 0).toFixed(2)}
               </span>
             </div>
             
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-400 font-bold min-w-[90px]">B手數總數:</span>
-              <span className="text-[11px] font-medium text-cyan-400 ml-auto">
+              <span className="text-xs text-gray-400 font-bold min-w-[90px]">B手數總數:</span>
+              <span className="text-xs font-medium text-cyan-400 ml-auto">
                 {(todayABStats?.b_lots_total ?? 0).toFixed(2)}
               </span>
             </div>
             
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-400 font-bold min-w-[90px]">手數差 (A-B):</span>
-              <span className={`text-[11px] font-medium ml-auto ${
+              <span className="text-xs text-gray-400 font-bold min-w-[90px]">手數差 (A-B):</span>
+              <span className={`text-xs font-medium ml-auto ${
                 (todayABStats?.lots_diff ?? 0) !== 0 ? 'text-red-400' : 'text-gray-300'
               }`}>
                 {(todayABStats?.lots_diff ?? 0) >= 0 ? '+' : ''}{(todayABStats?.lots_diff ?? 0).toFixed(2)}
@@ -96,8 +88,8 @@ function NodeCard({ node, onHide }) {
             </div>
             
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-400 font-bold min-w-[90px]">A盈利總數:</span>
-              <span className={`text-[11px] font-medium ml-auto ${
+              <span className="text-xs text-gray-400 font-bold min-w-[90px]">A盈利總數:</span>
+              <span className={`text-xs font-medium ml-auto ${
                 (todayABStats?.a_profit_total ?? 0) >= 0 ? 'text-cyber-green' : 'text-red-400'
               }`}>
                 {(todayABStats?.a_profit_total ?? 0) >= 0 ? '+' : ''}{(todayABStats?.a_profit_total ?? 0).toFixed(2)}
@@ -105,8 +97,8 @@ function NodeCard({ node, onHide }) {
             </div>
             
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-400 font-bold min-w-[90px]">B盈利總數:</span>
-              <span className={`text-[11px] font-medium ml-auto ${
+              <span className="text-xs text-gray-400 font-bold min-w-[90px]">B盈利總數:</span>
+              <span className={`text-xs font-medium ml-auto ${
                 (todayABStats?.b_profit_total ?? 0) >= 0 ? 'text-cyber-green' : 'text-red-400'
               }`}>
                 {(todayABStats?.b_profit_total ?? 0) >= 0 ? '+' : ''}{(todayABStats?.b_profit_total ?? 0).toFixed(2)}
@@ -114,7 +106,7 @@ function NodeCard({ node, onHide }) {
             </div>
             
             <div className="flex items-center gap-2 border-t border-gray-700/50 pt-1">
-              <span className="text-[10px] text-gray-400 font-bold min-w-[90px]">AB總盈利:</span>
+              <span className="text-xs text-gray-400 font-bold min-w-[90px]">AB總盈利:</span>
               <span className={`text-sm font-bold ml-auto ${
                 (todayABStats?.ab_profit_total ?? 0) >= 0 ? 'text-cyber-green' : 'text-red-400'
               }`}>
@@ -123,22 +115,22 @@ function NodeCard({ node, onHide }) {
             </div>
             
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-400 font-bold min-w-[90px]">A總息:</span>
-              <span className="text-[11px] text-cyan-400 ml-auto">
+              <span className="text-xs text-gray-400 font-bold min-w-[90px]">A總息:</span>
+              <span className="text-xs text-cyan-400 ml-auto">
                 {(todayABStats?.a_interest_total ?? 0).toFixed(2)}
               </span>
             </div>
             
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-400 font-bold min-w-[90px]">回佣:</span>
-              <span className="text-[11px] font-medium text-cyan-400 ml-auto">
+              <span className="text-xs text-gray-400 font-bold min-w-[90px]">回佣:</span>
+              <span className="text-xs font-medium text-cyan-400 ml-auto">
                 ${((todayABStats?.a_lots_total || 0) * (todayABStats?.commission_per_lot || 0)).toFixed(2)}
               </span>
             </div>
             
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-400 font-bold min-w-[90px]">場上手數:</span>
-              <span className={`text-[11px] font-medium ml-auto ${
+              <span className="text-xs text-gray-400 font-bold min-w-[90px]">場上手數:</span>
+              <span className={`text-xs font-medium ml-auto ${
                 (todayABStats?.open_lots ?? 0) === 0 ? 'text-gray-200' : 'text-orange-400'
               }`}>
                 {(todayABStats?.open_lots ?? 0).toFixed(2)}
@@ -146,8 +138,8 @@ function NodeCard({ node, onHide }) {
             </div>
             
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-400 font-bold min-w-[90px]">每手成本:</span>
-              <span className={`text-[11px] font-medium ml-auto ${
+              <span className="text-xs text-gray-400 font-bold min-w-[90px]">每手成本:</span>
+              <span className={`text-xs font-medium ml-auto ${
                 (todayABStats?.cost_per_lot ?? 0) >= 0 ? 'text-cyber-green' : 'text-red-400'
               }`}>
                 {(todayABStats?.cost_per_lot ?? 0) >= 0 ? '+' : ''}{(todayABStats?.cost_per_lot ?? 0).toFixed(2)}
