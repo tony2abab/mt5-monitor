@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-function Header({ summary, autoRefresh, onToggleRefresh, onRefresh, onRequestReport }) {
+function Header({ summary, autoRefresh, onToggleRefresh, onRefresh, onRequestReport, username, selectedGroup, onLogout }) {
   const [currentTime, setCurrentTime] = useState(new Date())
 
   useEffect(() => {
@@ -17,7 +17,7 @@ function Header({ summary, autoRefresh, onToggleRefresh, onRefresh, onRequestRep
           {/* Title */}
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-cyber-blue via-cyber-purple to-cyber-pink bg-clip-text text-transparent">
-              MT5 Trading Monitor
+              WintradeX
             </h1>
             <p className="text-gray-500 text-sm mt-1">
               {currentTime.toLocaleString('zh-TW', { 
@@ -98,7 +98,28 @@ function Header({ summary, autoRefresh, onToggleRefresh, onRefresh, onRequestRep
           )}
 
           {/* Refresh controls */}
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {/* User info and current group */}
+            {username && (
+              <div className="text-sm mr-2 text-right">
+                <div className="text-gray-400">
+                  用戶: <span className="text-cyber-blue">{username}</span>
+                </div>
+                {selectedGroup && (
+                  <div className="text-gray-400">
+                    分組: <span className="text-cyber-purple">{selectedGroup === 'all' ? '全部' : selectedGroup}</span>
+                  </div>
+                )}
+              </div>
+            )}
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 rounded-lg transition-all"
+              >
+                登出
+              </button>
+            )}
             <button
               onClick={onRefresh}
               className="px-4 py-2 bg-cyber-blue/20 hover:bg-cyber-blue/30 border border-cyber-blue/50 text-cyber-blue rounded-lg transition-all hover:cyber-glow"

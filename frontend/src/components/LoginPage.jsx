@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Lock, AlertCircle, Eye, EyeOff, Shield } from 'lucide-react';
+import { Lock, User, AlertCircle, Eye, EyeOff, Shield } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export default function LoginPage({ onLoginSuccess }) {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -22,16 +23,19 @@ export default function LoginPage({ onLoginSuccess }) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ username, password }),
       });
 
       const data = await response.json();
 
       if (data.ok) {
-        // 保存 session token
+        // 保存 session token 和用戶信息
         localStorage.setItem('sessionToken', data.token);
         localStorage.setItem('sessionExpires', data.expiresAt);
-        onLoginSuccess();
+        localStorage.setItem('username', data.username);
+        localStorage.setItem('allowedGroups', JSON.stringify(data.allowedGroups || []));
+        localStorage.setItem('showUngrouped', data.showUngrouped ? 'true' : 'false');
+        onLoginSuccess(data.username, data.allowedGroups, data.showUngrouped);
       } else {
         setError(data.error || 'Login failed');
         if (data.attemptsRemaining !== undefined) {
@@ -112,6 +116,26 @@ export default function LoginPage({ onLoginSuccess }) {
 
           {/* Login Form */}
           <form onSubmit={handleSubmit}>
+            {/* Username Field */}
+            <div className="mb-4">
+              <label className="block text-gray-400 text-sm mb-2">Username</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <User className="w-5 h-5 text-gray-500" />
+                </div>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full bg-cyber-dark/50 border border-cyber-border rounded-lg py-3 pl-12 pr-4 text-white placeholder-gray-500 focus:outline-none focus:border-cyber-blue focus:ring-1 focus:ring-cyber-blue transition-colors"
+                  placeholder="Enter username"
+                  disabled={loading || blockedMinutes}
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Password Field */}
             <div className="mb-6">
               <label className="block text-gray-400 text-sm mb-2">Password</label>
               <div className="relative">
@@ -125,7 +149,6 @@ export default function LoginPage({ onLoginSuccess }) {
                   className="w-full bg-cyber-dark/50 border border-cyber-border rounded-lg py-3 pl-12 pr-12 text-white placeholder-gray-500 focus:outline-none focus:border-cyber-blue focus:ring-1 focus:ring-cyber-blue transition-colors"
                   placeholder="Enter password"
                   disabled={loading || blockedMinutes}
-                  autoFocus
                 />
                 <button
                   type="button"
@@ -139,7 +162,7 @@ export default function LoginPage({ onLoginSuccess }) {
 
             <button
               type="submit"
-              disabled={loading || !password || blockedMinutes}
+              disabled={loading || !username || !password || blockedMinutes}
               className="w-full bg-gradient-to-r from-cyber-blue to-cyber-purple text-white font-medium py-3 px-4 rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-cyber-blue focus:ring-offset-2 focus:ring-offset-cyber-dark disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {loading ? (

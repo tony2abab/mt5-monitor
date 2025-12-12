@@ -6,11 +6,21 @@ CREATE TABLE IF NOT EXISTS nodes (
     name TEXT NOT NULL,
     broker TEXT,
     account TEXT,
+    client_group TEXT DEFAULT 'A',  -- 客戶分組 (A, B, C...)
     last_heartbeat DATETIME,
     status TEXT CHECK(status IN ('online', 'offline')) DEFAULT 'offline',
     meta TEXT, -- JSON string for additional metadata like symbols
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Users table: stores web login users
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    password TEXT NOT NULL,
+    allowed_groups TEXT DEFAULT 'A,B,C',  -- 允許查看的分組，逗號分隔
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Stats table: stores daily trading statistics for each node [LEGACY - 保留向後兼容]

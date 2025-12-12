@@ -26,23 +26,26 @@ class DatabaseManager {
     
     // Node operations
     upsertNode(nodeData) {
-        const { id, name, broker, account, meta } = nodeData;
+        const { id, name, broker, account, meta, client_group } = nodeData;
         const metaJson = meta ? JSON.stringify(meta) : null;
+        // å¦‚æ?æ²’æ??ä? nameï¼Œä½¿??id ä½œç‚º nameï¼ˆå?å¾Œå…¼å®¹ï?
+        const nodeName = name || id;
         
         const stmt = this.db.prepare(`
-            INSERT INTO nodes (id, name, broker, account, meta, last_heartbeat, status, updated_at)
-            VALUES (?, ?, ?, ?, ?, datetime('now'), 'online', datetime('now'))
+            INSERT INTO nodes (id, name, broker, account, client_group, meta, last_heartbeat, status, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 'online', datetime('now'))
             ON CONFLICT(id) DO UPDATE SET
-                name = excluded.name,
+                name = COALESCE(excluded.name, name, excluded.id),
                 broker = excluded.broker,
                 account = excluded.account,
+                client_group = COALESCE(excluded.client_group, client_group, 'A'),
                 meta = excluded.meta,
                 last_heartbeat = excluded.last_heartbeat,
                 status = 'online',
                 updated_at = datetime('now')
         `);
         
-        return stmt.run(id, name, broker, account, metaJson);
+        return stmt.run(id, nodeName, broker, account, client_group || 'A', metaJson);
     }
     
     getNode(id) {
@@ -58,9 +61,16 @@ class DatabaseManager {
         return node;
     }
     
-    getAllNodes() {
-        const stmt = this.db.prepare('SELECT * FROM nodes ORDER BY created_at DESC');
-        const nodes = stmt.all();
+    getAllNodes(clientGroup = null) {
+        let stmt;
+        let nodes;
+        if (clientGroup) {
+            stmt = this.db.prepare('SELECT * FROM nodes WHERE client_group = ? ORDER BY created_at DESC');
+            nodes = stmt.all(clientGroup);
+        } else {
+            stmt = this.db.prepare('SELECT * FROM nodes ORDER BY created_at DESC');
+            nodes = stmt.all();
+        }
         return nodes.map(node => {
             if (node.meta) {
                 try {
@@ -73,6 +83,12 @@ class DatabaseManager {
         });
     }
     
+    // Get all unique client groups
+    getAllClientGroups() {
+        const stmt = this.db.prepare('SELECT DISTINCT client_group FROM nodes WHERE client_group IS NOT NULL ORDER BY client_group');
+        return stmt.all().map(row => row.client_group);
+    }
+    
     updateNodeStatus(id, status) {
         const stmt = this.db.prepare(`
             UPDATE nodes 
@@ -80,6 +96,15 @@ class DatabaseManager {
             WHERE id = ?
         `);
         return stmt.run(status, id);
+    }
+    
+    // Delete a node and all its related data
+    deleteNode(id) {
+        // Delete from all related tables
+        this.db.prepare('DELETE FROM stats WHERE node_id = ?').run(id);
+        this.db.prepare('DELETE FROM ab_stats WHERE node_id = ?').run(id);
+        this.db.prepare('DELETE FROM nodes WHERE id = ?').run(id);
+        console.log(`Deleted node ${id} and all related data`);
     }
     
     // Stats operations
@@ -185,8 +210,8 @@ class DatabaseManager {
     }
     
     getAllTodayABStats() {
-        // ç²å–ç•¶å‰äº¤æ˜“æ—¥çš„æ•¸æ“š
-        // å¦‚æžœå€«æ•¦æ™‚é–“åœ¨ 00:00-01:30 ä¹‹é–“ï¼Œé¡¯ç¤ºå‰ä¸€å¤©çš„æ•¸æ“š
+        // ?²å??¶å?äº¤æ??¥ç??¸æ?
+        // å¦‚æ??«æ•¦?‚é???00:00-01:30 ä¹‹é?ï¼Œé¡¯ç¤ºå?ä¸€å¤©ç??¸æ?
         const tradingDate = this.getCurrentTradingDate();
         
         const stmt = this.db.prepare(`
@@ -197,8 +222,8 @@ class DatabaseManager {
     }
     
     /**
-     * ç²å–æŒ‡å®šæ—¥æœŸçš„æ‰€æœ‰ AB çµ±è¨ˆæ•¸æ“š
-     * @param {string} date - YYYY-MM-DD æ ¼å¼çš„æ—¥æœŸ
+     * ?²å??‡å??¥æ??„æ???AB çµ±è??¸æ?
+     * @param {string} date - YYYY-MM-DD ?¼å??„æ—¥??
      */
     getAllABStatsByDate(date) {
         const stmt = this.db.prepare(`
@@ -209,26 +234,41 @@ class DatabaseManager {
     }
     
     /**
-     * ç²å–ç•¶å‰äº¤æ˜“æ—¥æœŸ
-     * CFDå¹³å°æ™‚é–“ 00:00-01:30 ä¹‹é–“ç®—å‰ä¸€å¤©ï¼Œ01:30 ä¹‹å¾Œç®—ç•¶å¤©
+     * ?²å??‡å?ç¯€é»žåœ¨?¥æ?ç¯„å??§ç? AB çµ±è??¸æ?
+     * @param {string} nodeId - ç¯€é»?ID
+     * @param {string} startDate - ?‹å??¥æ? YYYY-MM-DD
+     * @param {string} endDate - çµæ??¥æ? YYYY-MM-DD
+     */
+    getNodeABStatsByDateRange(nodeId, startDate, endDate) {
+        const stmt = this.db.prepare(`
+            SELECT * FROM ab_stats 
+            WHERE node_id = ? AND date >= ? AND date <= ?
+            ORDER BY date DESC
+        `);
+        return stmt.all(nodeId, startDate, endDate);
+    }
+    
+    /**
+     * ?²å??¶å?äº¤æ??¥æ?
+     * CFDå¹³å°?‚é? 00:00-01:30 ä¹‹é?ç®—å?ä¸€å¤©ï?01:30 ä¹‹å?ç®—ç•¶å¤?
      */
     getCurrentTradingDate() {
         const now = new Date();
         const timezone = process.env.TRADING_TIMEZONE || 'Europe/Athens';
         
-        // è½‰æ›ç‚º CFD å¹³å°æ™‚é–“
+        // è½‰æ???CFD å¹³å°?‚é?
         const platformTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
         
         const hours = platformTime.getHours();
         const minutes = platformTime.getMinutes();
         const timeInMinutes = hours * 60 + minutes;
         
-        // å¦‚æžœåœ¨ 00:00-01:30 ä¹‹é–“ï¼ˆ0-90 åˆ†é˜ï¼‰ï¼Œä½¿ç”¨å‰ä¸€å¤©çš„æ—¥æœŸ
-        if (timeInMinutes < 90) { // 01:30 = 90 åˆ†é˜
+        // å¦‚æ???00:00-01:30 ä¹‹é?ï¼?-90 ?†é?ï¼‰ï?ä½¿ç”¨?ä?å¤©ç??¥æ?
+        if (timeInMinutes < 90) { // 01:30 = 90 ?†é?
             platformTime.setDate(platformTime.getDate() - 1);
         }
         
-        // è¿”å›ž YYYY-MM-DD æ ¼å¼
+        // è¿”å? YYYY-MM-DD ?¼å?
         const year = platformTime.getFullYear();
         const month = String(platformTime.getMonth() + 1).padStart(2, '0');
         const day = String(platformTime.getDate()).padStart(2, '0');
@@ -390,7 +430,7 @@ class DatabaseManager {
     // Report request operations
     createReportRequest(nodeId = null) {
         if (nodeId === null) {
-            // å…¨å±€è«‹æ±‚ï¼šç‚ºæ¯å€‹ç¾æœ‰ç¯€é»žå‰µå»ºå–®ç¨çš„è«‹æ±‚è¨˜éŒ„
+            // ?¨å?è«‹æ?ï¼šç‚ºæ¯å€‹ç¾?‰ç?é»žå‰µå»ºå–®?¨ç?è«‹æ?è¨˜é?
             const nodes = this.getAllNodes();
             const stmt = this.db.prepare(`
                 INSERT INTO report_requests (node_id, requested_at)
@@ -405,7 +445,7 @@ class DatabaseManager {
             console.log(`[DB] Created report requests for ${count} nodes`);
             return { changes: count };
         } else {
-            // å–®å€‹ç¯€é»žè«‹æ±‚
+            // ?®å€‹ç?é»žè?æ±?
             const stmt = this.db.prepare(`
                 INSERT INTO report_requests (node_id, requested_at)
                 VALUES (?, datetime('now'))
@@ -415,7 +455,7 @@ class DatabaseManager {
     }
     
     checkReportRequest(nodeId) {
-        // åªæª¢æŸ¥è©²ç¯€é»žçš„è«‹æ±‚ï¼ˆä¸å†æ”¯æŒ NULL å…¨å±€è«‹æ±‚ï¼‰
+        // ?ªæª¢?¥è©²ç¯€é»žç?è«‹æ?ï¼ˆä??æ”¯??NULL ?¨å?è«‹æ?ï¼?
         const stmt = this.db.prepare(`
             SELECT * FROM report_requests 
             WHERE node_id = ?
@@ -441,6 +481,53 @@ class DatabaseManager {
             WHERE requested_at < datetime('now', '-' || ? || ' days')
         `);
         return stmt.run(daysToKeep);
+    }
+    
+    // User management
+    getUser(username) {
+        const stmt = this.db.prepare('SELECT * FROM users WHERE username = ?');
+        return stmt.get(username);
+    }
+    
+    createUser(username, password, allowedGroups = 'A,B,C', showUngrouped = true) {
+        const stmt = this.db.prepare(`
+            INSERT INTO users (username, password, allowed_groups, show_ungrouped)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(username) DO UPDATE SET
+                password = excluded.password,
+                allowed_groups = excluded.allowed_groups,
+                show_ungrouped = excluded.show_ungrouped
+        `);
+        return stmt.run(username, password, allowedGroups, showUngrouped ? 1 : 0);
+    }
+    
+    getAllUsers() {
+        const stmt = this.db.prepare('SELECT id, username, allowed_groups, created_at FROM users');
+        return stmt.all();
+    }
+    
+    deleteUser(username) {
+        const stmt = this.db.prepare('DELETE FROM users WHERE username = ?');
+        return stmt.run(username);
+    }
+    
+    // Initialize default users if not exist
+    initializeDefaultUsers() {
+        // ç¢ºä? users è¡¨æ? show_ungrouped æ¬„ä?
+        try {
+            this.db.exec("ALTER TABLE users ADD COLUMN show_ungrouped INTEGER DEFAULT 1");
+        } catch (e) {
+            // æ¬„ä?å·²å???
+        }
+        
+        // ?¨æˆ¶ Aï¼šå??°å?è®Šæ•¸?²å?å¯†ç¢¼ï¼Œé¡¯ç¤ºç„¡?†ç?ç¯€é»?
+        const passwordA = process.env.WEB_PASSWORD || 'admin123';
+        this.createUser('A', passwordA, 'A,B,C', true);  // é¡¯ç¤º?¡å?çµ„ç?é»?
+        console.log('User A configured: groups=A,B,C, showUngrouped=true');
+        
+        // ?¨æˆ¶ Bï¼šåª?‹å?çµ?Cï¼Œä?é¡¯ç¤º?¡å?çµ„ç?é»?
+        this.createUser('B', 'tt8899TT', 'C', false);  // ä¸é¡¯ç¤ºç„¡?†ç?ç¯€é»?
+        console.log('User B configured: groups=C, showUngrouped=false');
     }
     
     close() {

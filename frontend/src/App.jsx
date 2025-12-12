@@ -29,6 +29,11 @@ function App() {
   const [authChecking, setAuthChecking] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [loginRequired, setLoginRequired] = useState(false)
+  const [username, setUsername] = useState('')
+  const [allowedGroups, setAllowedGroups] = useState([])
+  const [clientGroups, setClientGroups] = useState([])
+  const [selectedGroup, setSelectedGroup] = useState('all')  // 當前選擇的分組
+  const [showUngrouped, setShowUngrouped] = useState(true)  // 是否顯示無分組節點
   
   // 檢查登入狀態
   useEffect(() => {
@@ -43,12 +48,16 @@ function App() {
         if (data.ok) {
           setIsAuthenticated(data.authenticated)
           setLoginRequired(data.loginRequired)
+          if (data.username) setUsername(data.username)
+          if (data.allowedGroups) setAllowedGroups(data.allowedGroups)
+          if (data.clientGroups) setClientGroups(data.clientGroups)
+          if (data.showUngrouped !== undefined) setShowUngrouped(data.showUngrouped)
         }
       } catch (err) {
         console.error('Auth check failed:', err)
-        // 如果檢查失敗，假設不需要登入（向後兼容）
-        setIsAuthenticated(true)
-        setLoginRequired(false)
+        // 如果檢查失敗，顯示登入頁面讓用戶重試
+        setIsAuthenticated(false)
+        setLoginRequired(true)
       } finally {
         setAuthChecking(false)
       }
@@ -58,8 +67,23 @@ function App() {
   }, [])
   
   // 登入成功回調
-  const handleLoginSuccess = () => {
+  const handleLoginSuccess = (user, groups, ungrouped) => {
     setIsAuthenticated(true)
+    setUsername(user)
+    setAllowedGroups(groups || [])
+    setShowUngrouped(ungrouped !== false)
+  }
+
+  // 登出
+  const handleLogout = () => {
+    localStorage.removeItem('sessionToken')
+    localStorage.removeItem('sessionExpires')
+    localStorage.removeItem('username')
+    localStorage.removeItem('allowedGroups')
+    setIsAuthenticated(false)
+    setUsername('')
+    setAllowedGroups([])
+    setSelectedGroup('all')
   }
 
   // On first load, restore hidden nodes from localStorage so they stay hidden across refresh
@@ -108,11 +132,16 @@ function App() {
   const fetchNodes = useCallback(async (dateOverride = null) => {
     try {
       const dateParam = dateOverride || selectedDate
+      // 添加分組過濾參數
+      const groupParam = selectedGroup !== 'all' ? `&group=${selectedGroup}` : ''
       const url = dateParam === 'today' 
-        ? `${API_BASE}/nodes`
-        : `${API_BASE}/nodes-by-date?date=${dateParam}`
+        ? `${API_BASE}/nodes${selectedGroup !== 'all' ? `?group=${selectedGroup}` : ''}`
+        : `${API_BASE}/nodes-by-date?date=${dateParam}${groupParam}`
       
-      const response = await fetch(url)
+      const token = localStorage.getItem('sessionToken')
+      const response = await fetch(url, {
+        headers: token ? { 'X-Session-Token': token } : {}
+      })
       if (!response.ok) throw new Error('Failed to fetch nodes')
       
       const data = await response.json()
@@ -141,12 +170,15 @@ function App() {
     } finally {
       setLoading(false)
     }
-  }, [selectedDate])
+  }, [selectedDate, selectedGroup])
 
   // 獲取快照時間信息
   const fetchSnapshotInfo = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/snapshot-info`)
+      const token = localStorage.getItem('sessionToken')
+      const response = await fetch(`${API_BASE}/snapshot-info`, {
+        headers: token ? { 'X-Session-Token': token } : {}
+      })
       if (response.ok) {
         const data = await response.json()
         if (data.ok) {
@@ -190,10 +222,12 @@ function App() {
     }
   }, [fetchNodes, fetchSnapshotInfo, autoRefresh])
 
-  // 當選擇日期改變時重新獲取數據
+  // 當選擇日期或分組改變時重新獲取數據
   useEffect(() => {
+    // 切換分組時先清空節點，避免閃爍顯示舊數據
+    setNodes([])
     fetchNodes()
-  }, [selectedDate])
+  }, [selectedDate, selectedGroup])
 
   // Filter and sort nodes
   const processedNodes = nodes
@@ -254,6 +288,20 @@ function App() {
         const now = new Date()
         const hoursDiff = (now - lastHeartbeat) / (1000 * 60 * 60)
         if (hoursDiff > inactiveHours) return false
+      }
+      
+      // 無分組節點過濾（根據用戶權限）
+      if (!showUngrouped && (!node.client_group || node.client_group === '')) {
+        return false
+      }
+      
+      // 當選擇「全部」時，只顯示用戶有權限的分組
+      if (selectedGroup === 'all' && allowedGroups.length > 0) {
+        const nodeGroup = node.client_group || ''
+        // 如果節點有分組，檢查是否在允許的分組中
+        if (nodeGroup && !allowedGroups.includes(nodeGroup)) {
+          return false
+        }
       }
       
       return true
@@ -318,22 +366,57 @@ function App() {
           onToggleRefresh={() => setAutoRefresh(!autoRefresh)}
           onRefresh={handleManualRefresh}
           onRequestReport={fetchSnapshotInfo}
+          username={username}
+          selectedGroup={selectedGroup}
+          onLogout={loginRequired ? handleLogout : null}
         />
 
         <main className="container mx-auto px-4 py-8">
-          {/* Snapshot Time Info */}
-          {currentPage === 'monitor' && snapshotInfo && (
-            <div className="mb-2 text-sm text-white">
-              <span>
-                最後上報: {snapshotInfo.lastSnapshot 
-                  ? `${snapshotInfo.lastSnapshot.platform} (${snapshotInfo.lastSnapshot.hk})`
-                  : '尚無記錄'
-                }
-                {' | '}
-                下次快照: {snapshotInfo.nextSnapshot.platform} ({snapshotInfo.nextSnapshot.hk})
-              </span>
-            </div>
-          )}
+          {/* Client Group Selector + Snapshot Time Info - 同一行 */}
+          <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
+            {/* Client Group Selector */}
+            {allowedGroups.length > 0 && (
+              <div className="flex gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-purple/30">
+                <button
+                  onClick={() => setSelectedGroup('all')}
+                  className={`px-4 py-2 rounded transition-all ${
+                    selectedGroup === 'all'
+                      ? 'bg-cyber-purple/20 text-cyber-purple font-semibold'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  全部
+                </button>
+                {allowedGroups.map(group => (
+                  <button
+                    key={group}
+                    onClick={() => setSelectedGroup(group)}
+                    className={`px-4 py-2 rounded transition-all ${
+                      selectedGroup === group
+                        ? 'bg-cyber-purple/20 text-cyber-purple font-semibold'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    分組 {group}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Snapshot Time Info - 右對齊 */}
+            {currentPage === 'monitor' && snapshotInfo && (
+              <div className="text-sm text-white ml-auto">
+                <span>
+                  最後上報: {snapshotInfo.lastSnapshot 
+                    ? `${snapshotInfo.lastSnapshot.platform} (${snapshotInfo.lastSnapshot.hk})`
+                    : '尚無記錄'
+                  }
+                  {' | '}
+                  下次快照: {snapshotInfo.nextSnapshot.platform} ({snapshotInfo.nextSnapshot.hk})
+                </span>
+              </div>
+            )}
+          </div>
 
           {/* Monitor Page Controls - Combined Navigation and View Controls */}
           {currentPage === 'monitor' && (
@@ -505,6 +588,11 @@ function App() {
             </div>
           )}
 
+          {/* History Page Content */}
+          {currentPage === 'history' && (
+            <HistoryView selectedGroup={selectedGroup} />
+          )}
+
           {/* Monitor Page Content */}
           {currentPage === 'monitor' && (
             <>
@@ -572,16 +660,55 @@ function App() {
                 ))}
               </div>
             ) : (
-              <NodeTable nodes={processedNodes} />
+              <NodeTable 
+                nodes={processedNodes} 
+                onHideNode={async (node) => {
+                  // 前端隱藏
+                  setHiddenNodes(prev => {
+                    const currentStatsTime = node.todayABStats?.reported_at || 
+                                             node.todayStats?.reported_at || 
+                                             node.last_ab_stats_at || 
+                                             node.last_stats_at
+                    const updated = {
+                      ...prev,
+                      [node.id]: {
+                        heartbeat: node.last_heartbeat || null,
+                        statsTime: currentStatsTime || null
+                      }
+                    }
+                    try {
+                      localStorage.setItem('mt5_hidden_nodes', JSON.stringify(updated))
+                    } catch (err) {
+                      console.error('Failed to persist hidden nodes:', err)
+                    }
+                    return updated
+                  })
+                  // 後端靜音
+                  try {
+                    await fetch(`${API_BASE}/nodes/${encodeURIComponent(node.id)}/mute`, { method: 'POST' })
+                  } catch (err) {
+                    console.error('Error muting node:', err)
+                  }
+                }}
+                onDeleteNode={async (nodeId) => {
+                  try {
+                    const res = await fetch(`${API_BASE}/nodes/${encodeURIComponent(nodeId)}`, { method: 'DELETE' })
+                    if (res.ok) {
+                      await fetchNodes()
+                    } else {
+                      setError('刪除節點失敗')
+                    }
+                  } catch (err) {
+                    console.error('Error deleting node:', err)
+                    setError('刪除節點失敗: ' + err.message)
+                  }
+                }}
+              />
             )
           )}
             </>
           )}
 
-          {/* History Page Content */}
-          {currentPage === 'history' && (
-            <HistoryView />
-          )}
         </main>
 
         {/* Footer */}

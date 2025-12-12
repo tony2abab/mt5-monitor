@@ -8,6 +8,28 @@ class HeartbeatService {
         this.job = null;
         this.notifyOffline = process.env.NOTIFY_OFFLINE !== 'false'; // default on
         this.mutedNodeIds = new Set(); // nodes whose offline notifications are muted (e.g. hidden in UI)
+        
+        // 靜默期設定（7 分鐘）
+        this.silentPeriodMinutes = 7;
+        this.silentUntil = null; // 靜默期結束時間
+        this.startSilentPeriod(); // 啟動時開始靜默期
+    }
+    
+    /**
+     * 開始靜默期（7 分鐘內不發送離線通知）
+     */
+    startSilentPeriod() {
+        const now = new Date();
+        this.silentUntil = new Date(now.getTime() + this.silentPeriodMinutes * 60 * 1000);
+        console.log(`[靜默期] 開始靜默期，將於 ${this.silentUntil.toLocaleString()} 結束（${this.silentPeriodMinutes} 分鐘後）`);
+    }
+    
+    /**
+     * 檢查是否在靜默期內
+     */
+    isInSilentPeriod() {
+        if (!this.silentUntil) return false;
+        return new Date() < this.silentUntil;
     }
     
     /**
@@ -122,6 +144,27 @@ class HeartbeatService {
             this.checkOfflineNodes();
         });
         
+        // 每 10 分鐘輸出一次交易時段狀態（用於診斷）
+        this.statusJob = cron.schedule('*/10 * * * *', () => {
+            const timezone = process.env.TRADING_TIMEZONE || 'Europe/Athens';
+            const now = new Date();
+            const tradingTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+            const isClosing = this.isMarketClosingTime();
+            const isWithin = this.isWithinTradingHours();
+            const isSilent = this.isInSilentPeriod();
+            console.log(`[交易時段狀態] ${timezone} 時間: ${tradingTime.toLocaleString()}, 收市時段: ${isClosing}, 交易時段內: ${isWithin}, 靜默期: ${isSilent}`);
+        });
+        
+        // 每天 01:30 開市時重設所有節點狀態並開始靜默期
+        // 使用 CFD 平台時區
+        this.marketOpenJob = cron.schedule('30 1 * * 1-5', () => {
+            console.log('[開市重設] 01:30 開市，重設所有節點狀態並開始 7 分鐘靜默期');
+            this.resetAllNodesStatus();
+            this.startSilentPeriod();
+        }, {
+            timezone: process.env.TRADING_TIMEZONE || 'Europe/Athens'
+        });
+        
         console.log('Heartbeat monitoring service started (checking every minute)');
         
         // 輸出交易時段配置
@@ -160,22 +203,40 @@ class HeartbeatService {
                 
                 // Status changed from online to offline
                 if (shouldBeOffline && currentStatus === 'online') {
-                    console.log(`Node ${node.id} (${node.name}) went offline`);
+                    console.log(`[離線檢測] 節點 ${node.id} (${node.name}) 離線了`);
+                    console.log(`  - 最後心跳: ${node.last_heartbeat}`);
+                    console.log(`  - 距今秒數: ${secondsSinceHeartbeat.toFixed(0)}s (超時閾值: ${this.timeoutSeconds}s)`);
+                    
                     db.updateNodeStatus(node.id, 'offline');
                     db.addStateTransition(node.id, 'online', 'offline');
                     
                     // Send Telegram notification (if enabled and within trading hours)
                     if (this.notifyOffline && !this.mutedNodeIds.has(node.id)) {
-                        // 檢查是否在收市時段（23:55-01:05）
-                        if (this.isMarketClosingTime()) {
-                            console.log(`[收市時段] 節點 ${node.id} 在收市時段離線（23:50-01:15），跳過 TG 通知`);
-                        } else if (this.isWithinTradingHours()) {
+                        const isClosingTime = this.isMarketClosingTime();
+                        const isWithinHours = this.isWithinTradingHours();
+                        const isSilent = this.isInSilentPeriod();
+                        
+                        console.log(`  - notifyOffline: ${this.notifyOffline}`);
+                        console.log(`  - isMuted: ${this.mutedNodeIds.has(node.id)}`);
+                        console.log(`  - isMarketClosingTime: ${isClosingTime}`);
+                        console.log(`  - isWithinTradingHours: ${isWithinHours}`);
+                        console.log(`  - isInSilentPeriod: ${isSilent}`);
+                        
+                        // 檢查是否在靜默期
+                        if (isSilent) {
+                            console.log(`  => [靜默期] 跳過 TG 通知（靜默期至 ${this.silentUntil.toLocaleString()}）`);
+                        } else if (isClosingTime) {
+                            console.log(`  => [收市時段] 跳過 TG 通知`);
+                        } else if (isWithinHours) {
+                            console.log(`  => 發送 TG 離線通知...`);
                             telegram.sendNodeOfflineNotification(node).catch(err => {
                                 console.error('Failed to send offline notification:', err);
                             });
                         } else {
-                            console.log(`[交易時段限制] 節點 ${node.id} 離線，但不在交易時段內，跳過 TG 通知`);
+                            console.log(`  => [非交易時段] 跳過 TG 通知`);
                         }
+                    } else {
+                        console.log(`  - 通知被禁用或節點被靜音，跳過 TG 通知`);
                     }
                 }
                 
@@ -232,6 +293,34 @@ class HeartbeatService {
     // Explicitly unmute a node
     unmuteNode(id) {
         this.mutedNodeIds.delete(id);
+    }
+    
+    /**
+     * 重置所有節點狀態為 online（用於每日開市時）
+     * 這樣下次 checkOfflineNodes 時，如果節點仍然離線，會正確觸發 TG 通知
+     * 注意：此函數應與 startSilentPeriod() 配合使用，避免大量通知
+     */
+    resetAllNodesStatus() {
+        try {
+            const nodes = db.getAllNodes();
+            let resetCount = 0;
+            
+            nodes.forEach(node => {
+                if (node.status === 'offline') {
+                    db.updateNodeStatus(node.id, 'online');
+                    resetCount++;
+                    console.log(`[開市重設] 節點 ${node.id} 狀態重置為 online`);
+                }
+            });
+            
+            if (resetCount > 0) {
+                console.log(`[開市重設] 共重置 ${resetCount} 個離線節點的狀態`);
+            } else {
+                console.log('[開市重設] 沒有需要重置的離線節點');
+            }
+        } catch (error) {
+            console.error('[開市重設] 錯誤:', error);
+        }
     }
 }
 

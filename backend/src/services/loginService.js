@@ -15,7 +15,7 @@ class LoginService {
         this.data = {
             trustedIPs: {},      // { ip: { lastLogin, expiresAt, deviceCount } }
             failedAttempts: {},  // { ip: { count, lastAttempt, blockedUntil } }
-            sessions: {}         // { sessionToken: { ip, createdAt, expiresAt } }
+            sessions: {}         // { sessionToken: { ip, createdAt, expiresAt, username, allowedGroups } }
         };
         
         // 配置
@@ -115,6 +115,19 @@ class LoginService {
     }
     
     /**
+     * 獲取 session 信息
+     */
+    getSession(token) {
+        if (!token) return null;
+        const session = this.data.sessions[token];
+        if (!session) return null;
+        if (new Date(session.expiresAt) > new Date()) {
+            return session;
+        }
+        return null;
+    }
+    
+    /**
      * 記錄登入失敗
      */
     recordFailedAttempt(ip) {
@@ -143,7 +156,7 @@ class LoginService {
     /**
      * 登入成功，創建 session 並信任 IP
      */
-    loginSuccess(ip) {
+    loginSuccess(ip, username = null, allowedGroups = null, showUngrouped = true) {
         // 清除失敗記錄
         delete this.data.failedAttempts[ip];
         
@@ -166,16 +179,22 @@ class LoginService {
         
         this.data.sessions[token] = {
             ip,
+            username,
+            allowedGroups,
+            showUngrouped: showUngrouped ? true : false,
             createdAt: new Date().toISOString(),
             expiresAt: sessionExpires.toISOString()
         };
         
         this.save();
         
-        console.log(`[LoginService] Login success from IP ${ip}`);
+        console.log(`[LoginService] Login success from IP ${ip}, user: ${username}`);
         
         return {
             token,
+            username,
+            allowedGroups,
+            showUngrouped: showUngrouped ? true : false,
             expiresAt: sessionExpires.toISOString()
         };
     }
