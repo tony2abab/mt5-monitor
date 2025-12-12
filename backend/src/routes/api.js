@@ -6,6 +6,7 @@ const telegram = require('../services/telegram');
 const snapshotService = require('../services/snapshot');
 const schedulerService = require('../services/scheduler');
 const authMiddleware = require('../middleware/auth');
+const webAuthMiddleware = require('../middleware/webAuth');
 const loginService = require('../services/loginService');
 
 // ==================== 登入保護 API ====================
@@ -23,16 +24,7 @@ function getClientIP(req) {
 router.post('/auth/login', (req, res) => {
     try {
         const ip = getClientIP(req);
-        const { password } = req.body;
-        const expectedPassword = process.env.WEB_PASSWORD;
-        
-        // 檢查是否配置了密碼
-        if (!expectedPassword) {
-            return res.status(500).json({
-                ok: false,
-                error: 'Server login not configured'
-            });
-        }
+        const { username, password } = req.body;
         
         // 檢查 IP 是否被封鎖
         const blocked = loginService.isBlocked(ip);
@@ -44,22 +36,30 @@ router.post('/auth/login', (req, res) => {
             });
         }
         
-        // 驗證密碼
-        if (password !== expectedPassword) {
+        // 初始化默認用戶（如果不存在）
+        db.initializeDefaultUsers();
+        
+        // 從資料庫驗證用戶
+        const user = db.getUser(username);
+        
+        if (!user || user.password !== password) {
             const result = loginService.recordFailedAttempt(ip);
             return res.status(401).json({
                 ok: false,
-                error: 'Invalid password',
+                error: 'Invalid username or password',
                 attemptsRemaining: result.attemptsRemaining
             });
         }
         
         // 登入成功
-        const session = loginService.loginSuccess(ip);
+        const session = loginService.loginSuccess(ip, user.username, user.allowed_groups, user.show_ungrouped);
         
         res.json({
             ok: true,
             token: session.token,
+            username: session.username,
+            allowedGroups: session.allowedGroups ? session.allowedGroups.split(',') : [],
+            showUngrouped: session.showUngrouped,
             expiresAt: session.expiresAt,
             message: 'Login successful'
         });
@@ -90,38 +90,54 @@ router.get('/auth/check', (req, res) => {
         const token = req.headers['x-session-token'];
         const webLoginEnabled = process.env.WEB_LOGIN_ENABLED === 'true';
         
-        // 如果未啟用登入保護，直接返回已認證
+        // 如果未啟用登入保護，直接返回已認證（所有分組）
         if (!webLoginEnabled) {
             return res.json({
                 ok: true,
                 authenticated: true,
-                loginRequired: false
+                loginRequired: false,
+                allowedGroups: ['A', 'B', 'C'],
+                clientGroups: db.getAllClientGroups()
             });
         }
         
         // 檢查 session token
-        if (loginService.isValidSession(token)) {
+        const session = loginService.getSession(token);
+        if (session) {
+            // 如果 session 沒有 showUngrouped 欄位（舊 session），從資料庫重新獲取
+            let showUngrouped = session.showUngrouped;
+            if (showUngrouped === undefined && session.username) {
+                const user = db.getUser(session.username);
+                showUngrouped = user ? (user.show_ungrouped === 1) : true;
+            }
+            
             return res.json({
                 ok: true,
                 authenticated: true,
-                loginRequired: true
+                loginRequired: true,
+                username: session.username,
+                allowedGroups: session.allowedGroups ? session.allowedGroups.split(',') : [],
+                showUngrouped: showUngrouped === true,
+                clientGroups: db.getAllClientGroups()
             });
         }
         
-        // 檢查 IP 是否已信任
+        // 檢查 IP 是否已信任（但需要重新登入以獲取分組權限）
         if (loginService.isTrusted(ip)) {
             return res.json({
                 ok: true,
-                authenticated: true,
+                authenticated: false,
                 trustedIP: true,
-                loginRequired: true
+                loginRequired: true,
+                clientGroups: db.getAllClientGroups()
             });
         }
         
         res.json({
             ok: true,
             authenticated: false,
-            loginRequired: true
+            loginRequired: true,
+            clientGroups: db.getAllClientGroups()
         });
     } catch (error) {
         console.error('Error in auth check:', error);
@@ -145,13 +161,13 @@ router.get('/auth/stats', authMiddleware, (req, res) => {
 // POST /api/heartbeat - Receive heartbeat from MT5 EA (requires auth)
 router.post('/heartbeat', authMiddleware, (req, res) => {
     try {
-        const { id, name, broker, account, meta } = req.body;
+        const { id, name, broker, account, meta, client_group } = req.body;
         
-        // Validation
-        if (!id || !name) {
+        // Validation - name 已不再必需，改用 id 作為唯一識別
+        if (!id) {
             return res.status(400).json({
                 ok: false,
-                error: 'Missing required fields: id, name'
+                error: 'Missing required field: id'
             });
         }
         
@@ -160,7 +176,7 @@ router.post('/heartbeat', authMiddleware, (req, res) => {
         const oldStatus = oldNode ? oldNode.status : null;
         
         // Upsert node with heartbeat
-        db.upsertNode({ id, name, broker, account, meta });
+        db.upsertNode({ id, name, broker, account, meta, client_group });
         // When heartbeat is received, ensure node is no longer muted
         heartbeatService.unmuteNode(id);
         
@@ -363,7 +379,8 @@ router.post('/stats', authMiddleware, (req, res) => {
 // GET /api/nodes - Get all nodes with current status and today's AB stats
 router.get('/nodes', (req, res) => {
     try {
-        const nodes = db.getAllNodes();
+        const { group } = req.query;  // 可選的分組過濾
+        const nodes = db.getAllNodes(group || null);
         const todayABStats = db.getAllTodayABStats();
         const todayStats = db.getAllTodayStats(); // 保留向後兼容
         
@@ -456,6 +473,35 @@ router.get('/nodes/:id', (req, res) => {
     }
 });
 
+// DELETE /api/nodes/:id - Delete a node and all its data
+router.delete('/nodes/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const node = db.getNode(id);
+        if (!node) {
+            return res.status(404).json({
+                ok: false,
+                error: 'Node not found'
+            });
+        }
+
+        db.deleteNode(id);
+
+        res.json({
+            ok: true,
+            deleted: true,
+            nodeId: id,
+            serverTime: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Error deleting node:', error);
+        res.status(500).json({
+            ok: false,
+            error: 'Internal server error'
+        });
+    }
+});
+
 // POST /api/nodes/:id/mute - Mute offline Telegram notifications for a specific node
 router.post('/nodes/:id/mute', (req, res) => {
     try {
@@ -519,19 +565,81 @@ router.post('/nodes/resend-offline', async (req, res) => {
     }
 });
 
-// GET /api/history - Get all daily snapshots
+// GET /api/history - Get all daily snapshots (with optional group filtering)
 router.get('/history', (req, res) => {
     try {
-        const snapshots = db.getAllDailySnapshots();
+        const groupsParam = req.query.groups;
+        const allowedGroups = groupsParam ? groupsParam.split(',') : [];
+        
+        const snapshots = allowedGroups.length > 0 
+            ? db.getDailyStatsByGroups(allowedGroups)
+            : db.getAllDailySnapshots();
         
         res.json({
             ok: true,
             snapshots,
             count: snapshots.length,
+            groups: allowedGroups,
             serverTime: new Date().toISOString()
         });
     } catch (error) {
         console.error('Error fetching history:', error);
+        res.status(500).json({
+            ok: false,
+            error: 'Internal server error'
+        });
+    }
+});
+
+// GET /api/history/node - Get specific node's stats within date range with summary
+router.get('/history/node', (req, res) => {
+    try {
+        const { nodeId, startDate, endDate } = req.query;
+        
+        if (!nodeId || !startDate || !endDate) {
+            return res.status(400).json({
+                ok: false,
+                error: 'Missing required parameters: nodeId, startDate, endDate (format: YYYY-MM-DD)'
+            });
+        }
+        
+        // 獲取該節點在日期範圍內的所有數據
+        const stats = db.getNodeABStatsByDateRange(nodeId, startDate, endDate);
+        
+        // 過濾休市日（A盈利和AB盈利都為0）
+        const tradingDays = stats.filter(s => 
+            (s.a_profit_total !== 0 || s.ab_profit_total !== 0)
+        );
+        
+        // 計算加總
+        const summary = {
+            node_id: nodeId,
+            days_count: tradingDays.length,
+            total_a_lots: tradingDays.reduce((sum, s) => sum + (s.a_lots_total || 0), 0),
+            total_b_lots: tradingDays.reduce((sum, s) => sum + (s.b_lots_total || 0), 0),
+            total_lots_diff: tradingDays.reduce((sum, s) => sum + (s.lots_diff || 0), 0),
+            total_a_profit: tradingDays.reduce((sum, s) => sum + (s.a_profit_total || 0), 0),
+            total_b_profit: tradingDays.reduce((sum, s) => sum + (s.b_profit_total || 0), 0),
+            total_ab_profit: tradingDays.reduce((sum, s) => sum + (s.ab_profit_total || 0), 0),
+            total_a_interest: tradingDays.reduce((sum, s) => sum + (s.a_interest_total || 0), 0),
+            total_commission: tradingDays.reduce((sum, s) => sum + ((s.a_lots_total || 0) * (s.commission_per_lot || 0)), 0),
+            avg_daily_profit: tradingDays.length > 0 
+                ? tradingDays.reduce((sum, s) => sum + (s.ab_profit_total || 0), 0) / tradingDays.length 
+                : 0
+        };
+        
+        // 計算總盈含息佣
+        summary.total_profit_with_interest_commission = summary.total_ab_profit + summary.total_a_interest + summary.total_commission;
+        
+        res.json({
+            ok: true,
+            stats: tradingDays,
+            summary,
+            dateRange: { startDate, endDate },
+            serverTime: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Error fetching node history:', error);
         res.status(500).json({
             ok: false,
             error: 'Internal server error'
@@ -679,35 +787,33 @@ router.post('/request-report', (req, res) => {
 // GET /api/nodes-by-date - Get all nodes with stats for a specific date
 router.get('/nodes-by-date', (req, res) => {
     try {
-        const { date } = req.query;  // YYYY-MM-DD format, or 'today' or 'yesterday'
+        const { date, group } = req.query;  // YYYY-MM-DD format, or 'today' or 'yesterday'
         
-        // 計算實際日期
-        const timezone = process.env.TRADING_TIMEZONE || 'Europe/London';
+        // 計算實際日期 - 使用與 getCurrentTradingDate 相同的時區
+        const timezone = process.env.TRADING_TIMEZONE || 'Europe/Athens';
         const now = new Date();
-        const londonTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+        const platformTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
         
         let targetDate;
         if (date === 'today' || !date) {
             // 使用當前交易日
             targetDate = db.getCurrentTradingDate();
         } else if (date === 'yesterday') {
-            // 昨天的日期
-            const yesterday = new Date(londonTime);
-            yesterday.setDate(yesterday.getDate() - 1);
-            // 如果現在是 00:00-01:30，昨天其實是前天
-            const hours = londonTime.getHours();
-            const minutes = londonTime.getMinutes();
-            const timeInMinutes = hours * 60 + minutes;
-            if (timeInMinutes < 90) {
-                yesterday.setDate(yesterday.getDate() - 1);
-            }
-            targetDate = yesterday.toISOString().split('T')[0];
+            // 先獲取當前交易日，然後減一天
+            const currentTradingDate = db.getCurrentTradingDate();
+            const currentDate = new Date(currentTradingDate + 'T12:00:00Z');  // 使用中午避免時區問題
+            currentDate.setDate(currentDate.getDate() - 1);
+            targetDate = currentDate.toISOString().split('T')[0];
         } else {
             targetDate = date;
         }
         
-        const nodes = db.getAllNodes();
+        console.log(`[nodes-by-date] Requested date: ${date}, Calculated targetDate: ${targetDate}`);
+        
+        const nodes = db.getAllNodes(group || null);
         const dateABStats = db.getAllABStatsByDate(targetDate);
+        
+        console.log(`[nodes-by-date] Found ${nodes.length} nodes, ${dateABStats.length} AB stats for ${targetDate}`);
         
         // Create map of node_id to stats
         const abStatsMap = {};

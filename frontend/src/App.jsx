@@ -590,7 +590,7 @@ function App() {
 
           {/* History Page Content */}
           {currentPage === 'history' && (
-            <HistoryView selectedGroup={selectedGroup} />
+            <HistoryView allowedGroups={allowedGroups} selectedGroup={selectedGroup} />
           )}
 
           {/* Monitor Page Content */}

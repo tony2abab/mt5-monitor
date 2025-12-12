@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Calendar, TrendingUp, DollarSign, Activity, User } from 'lucide-react';
 
-function HistoryView() {
+function HistoryView({ allowedGroups = [], selectedGroup = '' }) {
   const [snapshots, setSnapshots] = useState([]);
   const [filteredSnapshots, setFilteredSnapshots] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,15 +27,22 @@ function HistoryView() {
   useEffect(() => {
     fetchHistory();
     fetchNodeList();
-  }, []);
+  }, [allowedGroups, selectedGroup]);
   
-  // 獲取節點列表
+  // 獲取節點列表（按用戶分組過濾）
   const fetchNodeList = async () => {
     try {
       const response = await fetch('/api/nodes');
       const data = await response.json();
       if (data.ok) {
-        setNodeList(data.nodes || []);
+        let nodes = data.nodes || [];
+        // 如果有分組限制，過濾節點列表
+        if (allowedGroups.length > 0) {
+          nodes = nodes.filter(node => 
+            node.client_group && allowedGroups.includes(node.client_group)
+          );
+        }
+        setNodeList(nodes);
       }
     } catch (err) {
       console.error('Failed to fetch node list:', err);
@@ -78,7 +85,12 @@ function HistoryView() {
   const fetchHistory = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/history');
+      // 如果選擇了特定分組（非'all'），只查詢該分組；否則查詢所有允許的分組
+      const groupsToQuery = (selectedGroup && selectedGroup !== 'all')
+        ? [selectedGroup] 
+        : allowedGroups;
+      const groupsParam = groupsToQuery.length > 0 ? `?groups=${groupsToQuery.join(',')}` : '';
+      const response = await fetch(`/api/history${groupsParam}`);
       const data = await response.json();
       
       if (data.ok) {
@@ -602,8 +614,8 @@ function HistoryView() {
                 <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300">AB總盈虧</th>
                 <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300">A總息</th>
                 <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300">總回佣</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300">總盈含息佣</th>
                 <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300">每手成本</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300">總盈含息佣</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700/50">
@@ -654,15 +666,15 @@ function HistoryView() {
                     <td className="px-3 py-3 text-xs text-right text-cyan-400 font-medium">
                       ${(snapshot.total_commission || 0).toFixed(2)}
                     </td>
-                    <td className={`px-3 py-3 text-sm text-right font-bold ${
-                      ((snapshot.total_ab_profit || 0) + (snapshot.total_a_interest || 0) + (snapshot.total_commission || 0)) >= 0 ? 'text-cyber-green' : 'text-red-400'
-                    }`}>
-                      {((snapshot.total_ab_profit || 0) + (snapshot.total_a_interest || 0) + (snapshot.total_commission || 0)) >= 0 ? '+' : ''}{((snapshot.total_ab_profit || 0) + (snapshot.total_a_interest || 0) + (snapshot.total_commission || 0)).toFixed(2)}
-                    </td>
                     <td className={`px-3 py-3 text-xs text-right font-medium ${
                       (snapshot.total_cost_per_lot || 0) >= 0 ? 'text-cyber-green' : 'text-red-400'
                     }`}>
                       {(snapshot.total_cost_per_lot || 0) >= 0 ? '+' : ''}{(snapshot.total_cost_per_lot || 0).toFixed(2)}
+                    </td>
+                    <td className={`px-3 py-3 text-sm text-right font-bold ${
+                      ((snapshot.total_ab_profit || 0) + (snapshot.total_a_interest || 0) + (snapshot.total_commission || 0)) >= 0 ? 'text-cyber-green' : 'text-red-400'
+                    }`}>
+                      {((snapshot.total_ab_profit || 0) + (snapshot.total_a_interest || 0) + (snapshot.total_commission || 0)) >= 0 ? '+' : ''}{((snapshot.total_ab_profit || 0) + (snapshot.total_a_interest || 0) + (snapshot.total_commission || 0)).toFixed(2)}
                     </td>
                   </tr>
                 ))

@@ -28,7 +28,7 @@ class DatabaseManager {
     upsertNode(nodeData) {
         const { id, name, broker, account, meta, client_group } = nodeData;
         const metaJson = meta ? JSON.stringify(meta) : null;
-        // 如�?沒�??��? name，使??id 作為 name（�?後兼容�?
+        // å¦‚æ?æ²’æ??�ä? nameï¼Œä½¿??id ä½œç‚º nameï¼ˆå?å¾Œå…¼å®¹ï?
         const nodeName = name || id;
         
         const stmt = this.db.prepare(`
@@ -210,8 +210,8 @@ class DatabaseManager {
     }
     
     getAllTodayABStats() {
-        // ?��??��?交�??��??��?
-        // 如�??�敦?��???00:00-01:30 之�?，顯示�?一天�??��?
+        // ?²å??¶å?äº¤æ??¥ç??¸æ?
+        // å¦‚æ??«æ•¦?‚é???00:00-01:30 ä¹‹é?ï¼Œé¡¯ç¤ºå?ä¸€å¤©ç??¸æ?
         const tradingDate = this.getCurrentTradingDate();
         
         const stmt = this.db.prepare(`
@@ -222,8 +222,8 @@ class DatabaseManager {
     }
     
     /**
-     * ?��??��??��??��???AB 統�??��?
-     * @param {string} date - YYYY-MM-DD ?��??�日??
+     * ?²å??‡å??¥æ??„æ???AB çµ±è??¸æ?
+     * @param {string} date - YYYY-MM-DD ?¼å??„æ—¥??
      */
     getAllABStatsByDate(date) {
         const stmt = this.db.prepare(`
@@ -234,10 +234,10 @@ class DatabaseManager {
     }
     
     /**
-     * ?��??��?節點在?��?範�??��? AB 統�??��?
-     * @param {string} nodeId - 節�?ID
-     * @param {string} startDate - ?��??��? YYYY-MM-DD
-     * @param {string} endDate - 結�??��? YYYY-MM-DD
+     * ?²å??‡å?ç¯€é»žåœ¨?¥æ?ç¯„å??§ç? AB çµ±è??¸æ?
+     * @param {string} nodeId - ç¯€é»?ID
+     * @param {string} startDate - ?‹å??¥æ? YYYY-MM-DD
+     * @param {string} endDate - çµ�æ??¥æ? YYYY-MM-DD
      */
     getNodeABStatsByDateRange(nodeId, startDate, endDate) {
         const stmt = this.db.prepare(`
@@ -249,26 +249,26 @@ class DatabaseManager {
     }
     
     /**
-     * ?��??��?交�??��?
-     * CFD平台?��? 00:00-01:30 之�?算�?一天�?01:30 之�?算當�?
+     * ?²å??¶å?äº¤æ??¥æ?
+     * CFDå¹³å�°?‚é? 00:00-01:30 ä¹‹é?ç®—å?ä¸€å¤©ï?01:30 ä¹‹å?ç®—ç•¶å¤?
      */
     getCurrentTradingDate() {
         const now = new Date();
         const timezone = process.env.TRADING_TIMEZONE || 'Europe/Athens';
         
-        // 轉�???CFD 平台?��?
+        // è½‰æ???CFD å¹³å�°?‚é?
         const platformTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
         
         const hours = platformTime.getHours();
         const minutes = platformTime.getMinutes();
         const timeInMinutes = hours * 60 + minutes;
         
-        // 如�???00:00-01:30 之�?�?-90 ?��?）�?使用?��?天�??��?
-        if (timeInMinutes < 90) { // 01:30 = 90 ?��?
+        // å¦‚æ???00:00-01:30 ä¹‹é?ï¼?-90 ?†é?ï¼‰ï?ä½¿ç”¨?�ä?å¤©ç??¥æ?
+        if (timeInMinutes < 90) { // 01:30 = 90 ?†é?
             platformTime.setDate(platformTime.getDate() - 1);
         }
         
-        // 返�? YYYY-MM-DD ?��?
+        // è¿”å? YYYY-MM-DD ?¼å?
         const year = platformTime.getFullYear();
         const month = String(platformTime.getMonth() + 1).padStart(2, '0');
         const day = String(platformTime.getDate()).padStart(2, '0');
@@ -401,6 +401,60 @@ class DatabaseManager {
         return stmt.all();
     }
     
+    /**
+     * 按分組獲取每日歷史統計數據
+     * @param {Array} allowedGroups - 允許的分組列表，如 ['A', 'B'] 或 ['C']
+     * @returns {Array} 每日統計數據
+     */
+    getDailyStatsByGroups(allowedGroups = []) {
+        if (!allowedGroups || allowedGroups.length === 0) {
+            return this.getAllDailySnapshots();
+        }
+        
+        // 檢查 nodes 表是否有 client_group 欄位
+        const nodesInfo = this.db.prepare('PRAGMA table_info(nodes)').all();
+        const hasClientGroup = nodesInfo.some(col => col.name === 'client_group');
+        
+        if (!hasClientGroup) {
+            // 如果沒有 client_group 欄位，返回所有數據
+            return this.getAllDailySnapshots();
+        }
+        
+        // 檢查 ab_stats 表是否有 commission_per_lot 欄位
+        const statsInfo = this.db.prepare('PRAGMA table_info(ab_stats)').all();
+        const hasCommission = statsInfo.some(col => col.name === 'commission_per_lot');
+        
+        const placeholders = allowedGroups.map(() => '?').join(',');
+        const commissionExpr = hasCommission 
+            ? 'SUM(a.commission_per_lot * a.a_lots_total)' 
+            : '0';
+        
+        const stmt = this.db.prepare(`
+            SELECT 
+                a.date as snapshot_date,
+                COUNT(DISTINCT a.node_id) as total_nodes,
+                SUM(a.a_lots_total) as total_a_lots,
+                SUM(a.b_lots_total) as total_b_lots,
+                SUM(a.lots_diff) as total_lots_diff,
+                SUM(a.a_profit_total) as total_a_profit,
+                SUM(a.b_profit_total) as total_b_profit,
+                SUM(a.ab_profit_total) as total_ab_profit,
+                SUM(a.a_interest_total) as total_a_interest,
+                ${commissionExpr} as total_commission,
+                CASE WHEN SUM(a.a_lots_total) > 0 
+                    THEN SUM(a.ab_profit_total) / SUM(a.a_lots_total) 
+                    ELSE 0 
+                END as total_cost_per_lot
+            FROM ab_stats a
+            JOIN nodes n ON a.node_id = n.id
+            WHERE n.client_group IN (${placeholders})
+            GROUP BY a.date
+            ORDER BY a.date DESC
+        `);
+        
+        return stmt.all(...allowedGroups);
+    }
+    
     getDailySnapshotByDate(date) {
         const stmt = this.db.prepare(`
             SELECT * FROM daily_snapshots 
@@ -430,7 +484,7 @@ class DatabaseManager {
     // Report request operations
     createReportRequest(nodeId = null) {
         if (nodeId === null) {
-            // ?��?請�?：為每個現?��?點創建單?��?請�?記�?
+            // ?¨å?è«‹æ?ï¼šç‚ºæ¯�å€‹ç�¾?‰ç?é»žå‰µå»ºå–®?¨ç?è«‹æ?è¨˜é?
             const nodes = this.getAllNodes();
             const stmt = this.db.prepare(`
                 INSERT INTO report_requests (node_id, requested_at)
@@ -445,7 +499,7 @@ class DatabaseManager {
             console.log(`[DB] Created report requests for ${count} nodes`);
             return { changes: count };
         } else {
-            // ?�個�?點�?�?
+            // ?®å€‹ç?é»žè?æ±?
             const stmt = this.db.prepare(`
                 INSERT INTO report_requests (node_id, requested_at)
                 VALUES (?, datetime('now'))
@@ -455,7 +509,7 @@ class DatabaseManager {
     }
     
     checkReportRequest(nodeId) {
-        // ?�檢?�該節點�?請�?（�??�支??NULL ?��?請�?�?
+        // ?ªæª¢?¥è©²ç¯€é»žç?è«‹æ?ï¼ˆä??�æ”¯??NULL ?¨å?è«‹æ?ï¼?
         const stmt = this.db.prepare(`
             SELECT * FROM report_requests 
             WHERE node_id = ?
@@ -513,20 +567,20 @@ class DatabaseManager {
     
     // Initialize default users if not exist
     initializeDefaultUsers() {
-        // 確�? users 表�? show_ungrouped 欄�?
+        // ç¢ºä? users è¡¨æ? show_ungrouped æ¬„ä?
         try {
             this.db.exec("ALTER TABLE users ADD COLUMN show_ungrouped INTEGER DEFAULT 1");
         } catch (e) {
-            // 欄�?已�???
+            // æ¬„ä?å·²å???
         }
         
-        // ?�戶 A：�??��?變數?��?密碼，顯示無?��?節�?
+        // ?¨æˆ¶ Aï¼šå??°å?è®Šæ•¸?²å?å¯†ç¢¼ï¼Œé¡¯ç¤ºç„¡?†ç?ç¯€é»?
         const passwordA = process.env.WEB_PASSWORD || 'admin123';
-        this.createUser('A', passwordA, 'A,B,C', true);  // 顯示?��?組�?�?
+        this.createUser('A', passwordA, 'A,B,C', true);  // é¡¯ç¤º?¡å?çµ„ç?é»?
         console.log('User A configured: groups=A,B,C, showUngrouped=true');
         
-        // ?�戶 B：只?��?�?C，�?顯示?��?組�?�?
-        this.createUser('B', 'tt8899TT', 'C', false);  // 不顯示無?��?節�?
+        // ?¨æˆ¶ Bï¼šå�ª?‹å?çµ?Cï¼Œä?é¡¯ç¤º?¡å?çµ„ç?é»?
+        this.createUser('B', 'tt8899TT', 'C', false);  // ä¸�é¡¯ç¤ºç„¡?†ç?ç¯€é»?
         console.log('User B configured: groups=C, showUngrouped=false');
     }
     

@@ -37,7 +37,7 @@ function NodeCard({ node, onHide }) {
       )}
 
       {/* Heartbeat */}
-      <div className="mb-2 pb-2 border-b border-gray-700/50 space-y-0.5">
+      <div className="mb-2 pb-2 border-b border-gray-400/50 space-y-0.5">
         <div className="flex items-center gap-2">
           <span className="text-sm text-white min-w-[60px]">最後心跳:</span>
           <span className={`text-xs font-medium ml-auto ${isOnline ? 'text-cyber-green' : 'text-red-400'}`}>
@@ -98,8 +98,8 @@ function NodeCard({ node, onHide }) {
               </span>
             </div>
             
-            <div className="flex items-center gap-2 border-t border-gray-700/50 pt-1">
-              <span className="text-sm text-white min-w-[90px]">AB總盈利:</span>
+            <div className="flex items-center gap-2 border-t border-gray-400/50 pt-1">
+              <span className="text-sm text-cyan-400 min-w-[90px]">AB總盈利:</span>
               <span className={`text-sm font-bold ml-auto ${
                 (todayABStats?.ab_profit_total ?? 0) >= 0 ? 'text-cyber-green' : 'text-red-400'
               }`}>
@@ -139,8 +139,8 @@ function NodeCard({ node, onHide }) {
               </span>
             </div>
             
-            <div className="flex items-center gap-2 border-t border-gray-700/50 pt-1">
-              <span className="text-sm text-white min-w-[90px]">總盈含息佣:</span>
+            <div className="flex items-center gap-2 border-t border-gray-400/50 pt-1">
+              <span className="text-sm text-cyan-400 min-w-[90px]">總盈含息佣:</span>
               <span className={`text-sm font-bold ml-auto ${
                 ((todayABStats?.ab_profit_total ?? 0) + (todayABStats?.a_interest_total ?? 0) + ((todayABStats?.a_lots_total || 0) * (todayABStats?.commission_per_lot || 0))) >= 0 ? 'text-cyber-green' : 'text-red-400'
               }`}>
