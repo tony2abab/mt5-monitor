@@ -746,6 +746,90 @@ router.get('/history/range', (req, res) => {
     }
 });
 
+// GET /api/history/daily-nodes - Get all nodes' stats for a specific date
+router.get('/history/daily-nodes', (req, res) => {
+    try {
+        const { date, groups, username } = req.query;
+        
+        if (!date) {
+            return res.status(400).json({
+                ok: false,
+                error: 'Missing required parameter: date (format: YYYY-MM-DD)'
+            });
+        }
+        
+        const allowedGroups = groups ? groups.split(',') : [];
+        const isAdmin = username === 'A';
+        
+        // 獲取節點信息（包含名稱和分組）- 先獲取以便過濾
+        const allNodes = db.getAllNodes();
+        const nodeMap = new Map(allNodes.map(n => [n.id, n]));
+        const validNodeIds = new Set(allNodes.map(n => n.id));
+        
+        // 12月12日之前的日期沒有節點明細數據，直接返回空
+        if (date < '2024-12-12') {
+            return res.json({
+                ok: true,
+                date,
+                stats: [],
+                count: 0,
+                groups: allowedGroups,
+                message: '此日期無節點明細數據（僅有匯總數據）',
+                serverTime: new Date().toISOString()
+            });
+        }
+        
+        // 獲取該日期所有節點的 AB 統計數據
+        let stats = db.getAllABStatsByDate(date);
+        
+        // 只保留在 nodes 表中存在的有效節點，過濾掉匯總行和無效節點
+        stats = stats.filter(s => s.node_id && validNodeIds.has(s.node_id));
+        
+        // 合併節點信息到統計數據
+        stats = stats.map(s => {
+            const node = nodeMap.get(s.node_id);
+            return {
+                ...s,
+                node_name: node?.name || s.node_id,
+                client_group: node?.client_group || null
+            };
+        });
+        
+        // 過濾掉匯總行（名稱包含「歷史」的節點）
+        stats = stats.filter(s => {
+            const name = (s.node_name || s.node_id || '');
+            const nameLower = name.toLowerCase();
+            return !name.includes('歷史') && !nameLower.includes('history') && !nameLower.includes('total');
+        });
+        
+        // 按分組過濾
+        if (allowedGroups.length > 0) {
+            stats = stats.filter(s => s.client_group && allowedGroups.includes(s.client_group));
+        } else if (!isAdmin) {
+            // 非管理員且沒有指定分組，返回空
+            stats = [];
+        }
+        
+        // 按 AB 總盈利排序（降序）
+        stats.sort((a, b) => (b.ab_profit_total || 0) - (a.ab_profit_total || 0));
+        
+        res.json({
+            ok: true,
+            date,
+            stats,
+            count: stats.length,
+            groups: allowedGroups,
+            serverTime: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Error fetching daily nodes stats:', error);
+        res.status(500).json({
+            ok: false,
+            error: 'Internal server error'
+        });
+    }
+});
+
 // POST /api/history/snapshot - Manually create a snapshot for today (testing/admin)
 router.post('/history/snapshot', (req, res) => {
     try {

@@ -23,6 +23,15 @@ function HistoryView({ allowedGroups = [], selectedGroup = '', username = '' }) 
   const [nodeSummary, setNodeSummary] = useState(null);
   const [nodeStats, setNodeStats] = useState([]);
   const [showNodeStats, setShowNodeStats] = useState(false);
+  
+  // 單日節點詳情查詢
+  const [dailyDetailDate, setDailyDetailDate] = useState('');
+  const [dailyNodeStats, setDailyNodeStats] = useState([]);
+  const [showDailyDetail, setShowDailyDetail] = useState(false);
+  const [loadingDailyDetail, setLoadingDailyDetail] = useState(false);
+  
+  // 功能區塊顯示控制：'range' | 'node' | 'daily' | null
+  const [activePanel, setActivePanel] = useState(null);
 
   useEffect(() => {
     fetchHistory();
@@ -80,6 +89,49 @@ function HistoryView({ allowedGroups = [], selectedGroup = '', username = '' }) 
     setNodeSummary(null);
     setNodeStats([]);
     setShowNodeStats(false);
+  };
+  
+  // 獲取單日各節點詳情
+  const fetchDailyNodeStats = async () => {
+    if (!dailyDetailDate) {
+      alert('請選擇日期');
+      return;
+    }
+    
+    try {
+      setLoadingDailyDetail(true);
+      const groupsToQuery = (selectedGroup && selectedGroup !== 'all')
+        ? [selectedGroup] 
+        : allowedGroups;
+      const params = new URLSearchParams();
+      params.set('date', dailyDetailDate);
+      if (groupsToQuery.length > 0) {
+        params.set('groups', groupsToQuery.join(','));
+      }
+      if (username) {
+        params.set('username', username);
+      }
+      const response = await fetch(`/api/history/daily-nodes?${params.toString()}`);
+      const data = await response.json();
+      
+      if (data.ok) {
+        setDailyNodeStats(data.stats);
+        setShowDailyDetail(true);
+      } else {
+        alert(data.error || '無法獲取數據');
+      }
+    } catch (err) {
+      alert('網絡錯誤：' + err.message);
+    } finally {
+      setLoadingDailyDetail(false);
+    }
+  };
+  
+  // 重置單日詳情查詢
+  const resetDailyDetail = () => {
+    setDailyDetailDate('');
+    setDailyNodeStats([]);
+    setShowDailyDetail(false);
   };
 
   const fetchHistory = async () => {
@@ -203,16 +255,48 @@ function HistoryView({ allowedGroups = [], selectedGroup = '', username = '' }) 
 
   return (
     <div className="space-y-6">
-      {/* 標題 */}
-      <div className="flex items-center gap-3">
-        <Calendar className="w-8 h-8 text-cyber-blue" />
-        <h2 className="text-2xl font-bold text-white">歷史數據</h2>
-        <span className="text-sm text-gray-400">
-          (每日倫敦時間 00:30 快照)
-        </span>
+      {/* 標題和功能按鈕 */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-3">
+          <Calendar className="w-8 h-8 text-cyber-blue" />
+          <h2 className="text-2xl font-bold text-white">歷史數據</h2>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActivePanel(activePanel === 'range' ? null : 'range')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              activePanel === 'range' 
+                ? 'bg-cyber-blue text-white' 
+                : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+            }`}
+          >
+            日期範圍篩選
+          </button>
+          <button
+            onClick={() => setActivePanel(activePanel === 'node' ? null : 'node')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              activePanel === 'node' 
+                ? 'bg-purple-600 text-white' 
+                : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+            }`}
+          >
+            單一節點查詢
+          </button>
+          <button
+            onClick={() => setActivePanel(activePanel === 'daily' ? null : 'daily')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              activePanel === 'daily' 
+                ? 'bg-orange-600 text-white' 
+                : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+            }`}
+          >
+            單日節點詳情
+          </button>
+        </div>
       </div>
 
       {/* 日期範圍篩選 */}
+      {activePanel === 'range' && (
       <div className="bg-cyber-darker/60 rounded-xl p-6 cyber-border">
         <h3 className="text-lg font-semibold text-white mb-4">日期範圍篩選</h3>
         <div className="flex flex-wrap items-end gap-4">
@@ -407,8 +491,10 @@ function HistoryView({ allowedGroups = [], selectedGroup = '', username = '' }) 
           </div>
         )}
       </div>
+      )}
 
       {/* 單一節點查詢 */}
+      {activePanel === 'node' && (
       <div className="bg-cyber-darker/60 rounded-xl p-6 cyber-border">
         <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
           <User className="w-5 h-5 text-purple-400" />
@@ -617,6 +703,177 @@ function HistoryView({ allowedGroups = [], selectedGroup = '', username = '' }) 
           </div>
         )}
       </div>
+      )}
+
+      {/* 單日節點詳情查詢 */}
+      {activePanel === 'daily' && (
+      <div className="bg-cyber-darker/60 rounded-xl p-6 cyber-border">
+        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <Calendar className="w-5 h-5 text-orange-400" />
+          單日節點詳情
+        </h3>
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-sm text-gray-400 mb-2">選擇日期</label>
+            <input
+              type="date"
+              value={dailyDetailDate}
+              onChange={(e) => setDailyDetailDate(e.target.value)}
+              className="w-full px-4 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:border-cyber-blue focus:outline-none [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:brightness-100"
+            />
+          </div>
+          <button
+            onClick={fetchDailyNodeStats}
+            disabled={loadingDailyDetail}
+            className="px-6 py-2 bg-orange-600 hover:bg-orange-500 disabled:bg-orange-800 text-white rounded-lg font-medium transition-colors"
+          >
+            {loadingDailyDetail ? '查詢中...' : '查詢該日節點'}
+          </button>
+          <button
+            onClick={resetDailyDetail}
+            className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+          >
+            重置
+          </button>
+        </div>
+
+        {/* 單日節點詳情表格 */}
+        {showDailyDetail && (
+          <div className="mt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-sm font-semibold text-gray-300">
+                {dailyDetailDate} 各節點數據 ({dailyNodeStats.length} 個節點)
+              </h4>
+              {dailyNodeStats.length > 0 && (
+                <div className="text-sm text-gray-400">
+                  總 AB 盈虧: 
+                  <span className={`ml-2 font-bold ${dailyNodeStats.reduce((sum, s) => sum + (s.ab_profit_total || 0), 0) >= 0 ? 'text-cyber-green' : 'text-red-400'}`}>
+                    {dailyNodeStats.reduce((sum, s) => sum + (s.ab_profit_total || 0), 0) >= 0 ? '+' : ''}
+                    {dailyNodeStats.reduce((sum, s) => sum + (s.ab_profit_total || 0), 0).toFixed(2)}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-800/50">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-gray-400">節點名稱</th>
+                    <th className="px-3 py-2 text-center text-gray-400">分組</th>
+                    <th className="px-3 py-2 text-right text-gray-400">A手數</th>
+                    <th className="px-3 py-2 text-right text-gray-400">B手數</th>
+                    <th className="px-3 py-2 text-right text-gray-400">手數差</th>
+                    <th className="px-3 py-2 text-right text-gray-400">A盈利</th>
+                    <th className="px-3 py-2 text-right text-gray-400">B盈利</th>
+                    <th className="px-3 py-2 text-right text-gray-400">AB盈虧</th>
+                    <th className="px-3 py-2 text-right text-gray-400">A總息</th>
+                    <th className="px-3 py-2 text-right text-gray-400">回佣</th>
+                    <th className="px-3 py-2 text-right text-gray-400">總盈含息佣</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-700/50">
+                  {dailyNodeStats.length === 0 ? (
+                    <tr>
+                      <td colSpan="11" className="px-4 py-8 text-center text-gray-500">
+                        {dailyDetailDate < '2024-12-12' 
+                          ? '此日期無節點明細數據（僅有匯總數據）' 
+                          : '該日期無數據'}
+                      </td>
+                    </tr>
+                  ) : (
+                    dailyNodeStats.map((stat) => {
+                      const commission = (stat.a_lots_total || 0) * (stat.commission_per_lot || 0);
+                      const totalWithInterestCommission = (stat.ab_profit_total || 0) + (stat.a_interest_total || 0) + commission;
+                      return (
+                        <tr key={stat.node_id} className="hover:bg-gray-800/30">
+                          <td className="px-3 py-2 text-white font-medium">{stat.node_name}</td>
+                          <td className="px-3 py-2 text-center text-purple-400">{stat.client_group || '-'}</td>
+                          <td className="px-3 py-2 text-right text-cyan-400">{(stat.a_lots_total || 0).toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right text-cyan-400">{(stat.b_lots_total || 0).toFixed(2)}</td>
+                          <td className={`px-3 py-2 text-right ${(stat.lots_diff || 0) !== 0 ? 'text-red-400' : 'text-gray-300'}`}>
+                            {(stat.lots_diff || 0) >= 0 ? '+' : ''}{(stat.lots_diff || 0).toFixed(2)}
+                          </td>
+                          <td className={`px-3 py-2 text-right ${(stat.a_profit_total || 0) >= 0 ? 'text-cyber-green' : 'text-red-400'}`}>
+                            {(stat.a_profit_total || 0) >= 0 ? '+' : ''}{(stat.a_profit_total || 0).toFixed(2)}
+                          </td>
+                          <td className={`px-3 py-2 text-right ${(stat.b_profit_total || 0) >= 0 ? 'text-cyber-green' : 'text-red-400'}`}>
+                            {(stat.b_profit_total || 0) >= 0 ? '+' : ''}{(stat.b_profit_total || 0).toFixed(2)}
+                          </td>
+                          <td className={`px-3 py-2 text-right font-medium ${(stat.ab_profit_total || 0) >= 0 ? 'text-cyber-green' : 'text-red-400'}`}>
+                            {(stat.ab_profit_total || 0) >= 0 ? '+' : ''}{(stat.ab_profit_total || 0).toFixed(2)}
+                          </td>
+                          <td className={`px-3 py-2 text-right ${(stat.a_interest_total || 0) >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                            {(stat.a_interest_total || 0) >= 0 ? '+' : ''}{(stat.a_interest_total || 0).toFixed(2)}
+                          </td>
+                          <td className="px-3 py-2 text-right text-cyan-400">
+                            ${commission.toFixed(2)}
+                          </td>
+                          <td className={`px-3 py-2 text-right font-bold ${totalWithInterestCommission >= 0 ? 'text-cyber-green' : 'text-red-400'}`}>
+                            {totalWithInterestCommission >= 0 ? '+' : ''}{totalWithInterestCommission.toFixed(2)}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+                {dailyNodeStats.length > 0 && (
+                  <tfoot className="bg-gray-800/70 font-semibold">
+                    <tr>
+                      <td className="px-3 py-2 text-white">合計</td>
+                      <td className="px-3 py-2 text-center text-gray-400">{dailyNodeStats.length}</td>
+                      <td className="px-3 py-2 text-right text-cyan-400">
+                        {dailyNodeStats.reduce((sum, s) => sum + (s.a_lots_total || 0), 0).toFixed(2)}
+                      </td>
+                      <td className="px-3 py-2 text-right text-cyan-400">
+                        {dailyNodeStats.reduce((sum, s) => sum + (s.b_lots_total || 0), 0).toFixed(2)}
+                      </td>
+                      <td className={`px-3 py-2 text-right ${dailyNodeStats.reduce((sum, s) => sum + (s.lots_diff || 0), 0) !== 0 ? 'text-red-400' : 'text-gray-300'}`}>
+                        {dailyNodeStats.reduce((sum, s) => sum + (s.lots_diff || 0), 0) >= 0 ? '+' : ''}
+                        {dailyNodeStats.reduce((sum, s) => sum + (s.lots_diff || 0), 0).toFixed(2)}
+                      </td>
+                      <td className={`px-3 py-2 text-right ${dailyNodeStats.reduce((sum, s) => sum + (s.a_profit_total || 0), 0) >= 0 ? 'text-cyber-green' : 'text-red-400'}`}>
+                        {dailyNodeStats.reduce((sum, s) => sum + (s.a_profit_total || 0), 0) >= 0 ? '+' : ''}
+                        {dailyNodeStats.reduce((sum, s) => sum + (s.a_profit_total || 0), 0).toFixed(2)}
+                      </td>
+                      <td className={`px-3 py-2 text-right ${dailyNodeStats.reduce((sum, s) => sum + (s.b_profit_total || 0), 0) >= 0 ? 'text-cyber-green' : 'text-red-400'}`}>
+                        {dailyNodeStats.reduce((sum, s) => sum + (s.b_profit_total || 0), 0) >= 0 ? '+' : ''}
+                        {dailyNodeStats.reduce((sum, s) => sum + (s.b_profit_total || 0), 0).toFixed(2)}
+                      </td>
+                      <td className={`px-3 py-2 text-right font-bold ${dailyNodeStats.reduce((sum, s) => sum + (s.ab_profit_total || 0), 0) >= 0 ? 'text-cyber-green' : 'text-red-400'}`}>
+                        {dailyNodeStats.reduce((sum, s) => sum + (s.ab_profit_total || 0), 0) >= 0 ? '+' : ''}
+                        {dailyNodeStats.reduce((sum, s) => sum + (s.ab_profit_total || 0), 0).toFixed(2)}
+                      </td>
+                      <td className={`px-3 py-2 text-right ${dailyNodeStats.reduce((sum, s) => sum + (s.a_interest_total || 0), 0) >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                        {dailyNodeStats.reduce((sum, s) => sum + (s.a_interest_total || 0), 0) >= 0 ? '+' : ''}
+                        {dailyNodeStats.reduce((sum, s) => sum + (s.a_interest_total || 0), 0).toFixed(2)}
+                      </td>
+                      <td className="px-3 py-2 text-right text-cyan-400">
+                        ${dailyNodeStats.reduce((sum, s) => sum + ((s.a_lots_total || 0) * (s.commission_per_lot || 0)), 0).toFixed(2)}
+                      </td>
+                      <td className={`px-3 py-2 text-right font-bold ${
+                        dailyNodeStats.reduce((sum, s) => {
+                          const commission = (s.a_lots_total || 0) * (s.commission_per_lot || 0);
+                          return sum + (s.ab_profit_total || 0) + (s.a_interest_total || 0) + commission;
+                        }, 0) >= 0 ? 'text-cyber-green' : 'text-red-400'
+                      }`}>
+                        {dailyNodeStats.reduce((sum, s) => {
+                          const commission = (s.a_lots_total || 0) * (s.commission_per_lot || 0);
+                          return sum + (s.ab_profit_total || 0) + (s.a_interest_total || 0) + commission;
+                        }, 0) >= 0 ? '+' : ''}
+                        {dailyNodeStats.reduce((sum, s) => {
+                          const commission = (s.a_lots_total || 0) * (s.commission_per_lot || 0);
+                          return sum + (s.ab_profit_total || 0) + (s.a_interest_total || 0) + commission;
+                        }, 0).toFixed(2)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+      )}
 
       {/* 歷史數據表格 */}
       <div className="bg-cyber-darker/60 rounded-xl cyber-border overflow-hidden">

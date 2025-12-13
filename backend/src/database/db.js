@@ -308,11 +308,16 @@ class DatabaseManager {
      * @param {string} date - YYYY-MM-DD ?¼å??„æ—¥??
      */
     getAllABStatsByDate(date) {
+        // 每個節點只取最新的一條記錄（按 id 降序，取第一條）
         const stmt = this.db.prepare(`
             SELECT * FROM ab_stats 
-            WHERE date = ?
+            WHERE date = ? AND id IN (
+                SELECT MAX(id) FROM ab_stats 
+                WHERE date = ? 
+                GROUP BY node_id
+            )
         `);
-        return stmt.all(date);
+        return stmt.all(date, date);
     }
     
     /**
@@ -559,6 +564,7 @@ class DatabaseManager {
                 ? 'SUM(a.commission_per_lot * a.a_lots_total)' 
                 : '0';
             
+            // 使用子查詢確保每個節點每天只取最新一條記錄，並排除「歷史數據」匯總行
             const stmt = this.db.prepare(`
                 SELECT 
                     a.date as snapshot_date,
@@ -578,6 +584,12 @@ class DatabaseManager {
                 FROM ab_stats a
                 JOIN nodes n ON a.node_id = n.id
                 WHERE n.client_group IN (${placeholders})
+                  AND n.name NOT LIKE '%歷史%'
+                  AND a.id IN (
+                      SELECT MAX(id) FROM ab_stats 
+                      WHERE date = a.date 
+                      GROUP BY node_id
+                  )
                 GROUP BY a.date
                 ORDER BY a.date DESC
             `);
@@ -626,6 +638,7 @@ class DatabaseManager {
                 ? 'SUM(a.commission_per_lot * a.a_lots_total)' 
                 : '0';
             
+            // 使用子查詢確保每個節點每天只取最新一條記錄，並排除「歷史數據」匯總行
             const stmt = this.db.prepare(`
                 SELECT 
                     a.date as snapshot_date,
@@ -646,6 +659,12 @@ class DatabaseManager {
                 JOIN nodes n ON a.node_id = n.id
                 WHERE n.client_group IN (${placeholders})
                   AND a.date >= ? AND a.date <= ?
+                  AND n.name NOT LIKE '%歷史%'
+                  AND a.id IN (
+                      SELECT MAX(id) FROM ab_stats 
+                      WHERE date = a.date 
+                      GROUP BY node_id
+                  )
                 GROUP BY a.date
                 ORDER BY a.date DESC
             `);
