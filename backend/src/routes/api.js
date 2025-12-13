@@ -422,14 +422,14 @@ router.get('/nodes', (req, res) => {
             
             // 對於 Monitor_OnlyHeartbeat 模式，如果有場上數據但沒有統計數據，顯示心跳時間
             let lastStatsRelative = null;
-            // 檢查是否有場上數據（任一欄位有非 null/undefined 的值，包括 0）
-            // balance 和 equity 只要有值就算有場上數據（即使為 0 也表示有上報）
+            // 檢查是否有場上數據（balance 或 equity 大於 0 表示有實際數據）
+            // 因為數據庫默認值是 0，所以需要檢查是否有實際的非零值
             const hasOpenData = (
-                (node.open_buy_lots != null) || 
-                (node.open_sell_lots != null) || 
-                (node.floating_pl != null) || 
-                (node.balance != null) || 
-                (node.equity != null)
+                (node.open_buy_lots > 0) || 
+                (node.open_sell_lots > 0) || 
+                (node.floating_pl !== 0 && node.floating_pl != null) || 
+                (node.balance > 0) || 
+                (node.equity > 0)
             );
             
             if (abStats && abStats.reported_at) {
@@ -437,6 +437,9 @@ router.get('/nodes', (req, res) => {
             } else if (hasOpenData && node.last_heartbeat) {
                 // Monitor_OnlyHeartbeat 模式：顯示心跳時間作為最後更新時間
                 lastStatsRelative = getRelativeTime(new Date(node.last_heartbeat)) + ' (場上)';
+            } else if (node.last_heartbeat && status === 'online') {
+                // 節點在線但沒有統計數據，顯示心跳時間
+                lastStatsRelative = getRelativeTime(new Date(node.last_heartbeat)) + ' (心跳)';
             }
             
             return {
