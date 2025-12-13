@@ -410,63 +410,102 @@ function App() {
 
         <main className="container mx-auto px-4 py-8">
 
-          {/* Monitor Page Controls - Combined Navigation and View Controls */}
+          {/* Monitor Page Controls */}
           {currentPage === 'monitor' && (
-            <div className="mb-6 flex flex-wrap gap-3 items-center justify-between">
+            <>
+            {/* 第一行：頁面導航 + 分組按鈕 + 輪詢按鈕組（右側） */}
+            <div className="mb-4 flex flex-wrap gap-3 items-center justify-between">
               <div className="flex flex-wrap gap-3 items-center">
-              {/* Page Navigation */}
-              <div className="flex gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-blue/20">
-                <button
-                  onClick={() => setCurrentPage('monitor')}
-                  className={`px-6 py-2 rounded transition-all ${
-                    currentPage === 'monitor' 
-                      ? 'bg-cyber-blue/20 text-cyber-blue font-semibold' 
-                      : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  即時監控
-                </button>
-                <button
-                  onClick={() => setCurrentPage('history')}
-                  className={`px-6 py-2 rounded transition-all ${
-                    currentPage === 'history' 
-                      ? 'bg-cyber-blue/20 text-cyber-blue font-semibold' 
-                      : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  歷史數據
-                </button>
-              </div>
-
-              {/* Client Group Selector */}
-              {allowedGroups.length > 0 && (
-                <div className="flex gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-purple/30">
+                {/* Page Navigation */}
+                <div className="flex gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-blue/20">
                   <button
-                    onClick={() => setSelectedGroup('all')}
-                    className={`px-4 py-2 rounded transition-all ${
-                      selectedGroup === 'all'
-                        ? 'bg-cyber-purple/20 text-cyber-purple font-semibold'
+                    onClick={() => setCurrentPage('monitor')}
+                    className={`px-6 py-2 rounded transition-all ${
+                      currentPage === 'monitor' 
+                        ? 'bg-cyber-blue/20 text-cyber-blue font-semibold' 
                         : 'text-gray-400 hover:text-gray-200'
                     }`}
                   >
-                    全部
+                    即時監控
                   </button>
-                  {allowedGroups.map(group => (
+                  <button
+                    onClick={() => setCurrentPage('history')}
+                    className={`px-6 py-2 rounded transition-all ${
+                      currentPage === 'history' 
+                        ? 'bg-cyber-blue/20 text-cyber-blue font-semibold' 
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    歷史數據
+                  </button>
+                </div>
+
+                {/* Client Group Selector */}
+                {allowedGroups.length > 0 && (
+                  <div className="flex gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-purple/30">
                     <button
-                      key={group}
-                      onClick={() => setSelectedGroup(group)}
+                      onClick={() => setSelectedGroup('all')}
                       className={`px-4 py-2 rounded transition-all ${
-                        selectedGroup === group
+                        selectedGroup === 'all'
                           ? 'bg-cyber-purple/20 text-cyber-purple font-semibold'
                           : 'text-gray-400 hover:text-gray-200'
                       }`}
                     >
-                      分組 {group}
+                      全部
                     </button>
-                  ))}
-                </div>
-              )}
+                    {allowedGroups.map(group => (
+                      <button
+                        key={group}
+                        onClick={() => setSelectedGroup(group)}
+                        className={`px-4 py-2 rounded transition-all ${
+                          selectedGroup === group
+                            ? 'bg-cyber-purple/20 text-cyber-purple font-semibold'
+                            : 'text-gray-400 hover:text-gray-200'
+                        }`}
+                      >
+                        分組 {group}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
+              {/* 輪詢間隔設定 - 右側 */}
+              <div className="flex items-center gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-blue/20">
+                <button
+                  onClick={() => setAutoPollEnabled(!autoPollEnabled)}
+                  className={`px-3 py-2 rounded transition-all text-sm ${
+                    autoPollEnabled
+                      ? 'bg-cyber-green/20 text-cyber-green'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                  title={autoPollEnabled ? '點擊停止自動輪詢' : '點擊啟動自動輪詢'}
+                >
+                  {autoPollEnabled ? '⏸️ 輪詢中' : '▶️ 自動輪詢'}
+                </button>
+                <select
+                  value={pollInterval}
+                  onChange={(e) => setPollInterval(Number(e.target.value))}
+                  className="px-2 py-2 bg-cyber-darker border-0 text-gray-200 text-sm focus:outline-none"
+                  title="輪詢間隔"
+                >
+                  <option value="60">60分鐘</option>
+                  <option value="90">90分鐘</option>
+                  <option value="120">2小時</option>
+                  <option value="180">3小時</option>
+                </select>
+                <button
+                  onClick={triggerReportRequest}
+                  className="px-3 py-2 rounded bg-cyber-blue/20 text-cyber-blue hover:bg-cyber-blue/30 transition-all text-sm"
+                  title="要求所有 MT4 在 1 分鐘內上報統計數據"
+                >
+                  📊 要求1分鐘內MT5上報數據
+                </button>
+              </div>
+            </div>
+
+            {/* 第二行：網格/表格 + 其他控制項 + 狀態信息（右側） */}
+            <div className="mb-6 flex flex-wrap gap-3 items-center justify-between">
               {/* View mode toggle */}
               <div className="flex gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-blue/20">
                 <button
@@ -538,7 +577,7 @@ function App() {
                 placeholder="搜尋節點..."
                 value={filterText}
                 onChange={(e) => setFilterText(e.target.value)}
-                className="w-full sm:w-64 px-4 py-2 bg-cyber-darker border border-cyber-blue/20 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:border-cyber-blue/60"
+                className="w-full sm:w-40 px-4 py-2 bg-cyber-darker border border-cyber-blue/20 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:border-cyber-blue/60"
               />
 
               {/* Clear stats button */}
@@ -592,41 +631,22 @@ function App() {
                 昨天
               </button>
             </div>
-              </div>
 
-              {/* 輪詢間隔設定 - 右側 */}
-              <div className="flex items-center gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-blue/20">
-                <button
-                  onClick={() => setAutoPollEnabled(!autoPollEnabled)}
-                  className={`px-3 py-2 rounded transition-all text-sm ${
-                    autoPollEnabled
-                      ? 'bg-cyber-green/20 text-cyber-green'
-                      : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                  title={autoPollEnabled ? '點擊停止自動輪詢' : '點擊啟動自動輪詢'}
-                >
-                  {autoPollEnabled ? '⏸️ 輪詢中' : '▶️ 自動輪詢'}
-                </button>
-                <select
-                  value={pollInterval}
-                  onChange={(e) => setPollInterval(Number(e.target.value))}
-                  className="px-2 py-2 bg-cyber-darker border-0 text-gray-200 text-sm focus:outline-none"
-                  title="輪詢間隔"
-                >
-                  <option value="60">60分鐘</option>
-                  <option value="90">90分鐘</option>
-                  <option value="120">2小時</option>
-                  <option value="180">3小時</option>
-                </select>
-                <button
-                  onClick={triggerReportRequest}
-                  className="px-3 py-2 rounded bg-cyber-blue/20 text-cyber-blue hover:bg-cyber-blue/30 transition-all text-sm"
-                  title="要求所有 MT4 在 1 分鐘內上報統計數據"
-                >
-                  📊 要求1分鐘內MT5上報數據
-                </button>
-              </div>
+              {/* 狀態信息（右側） */}
+              {snapshotInfo && (
+                <div className="text-sm text-white ml-auto">
+                  <span>
+                    最後上報: {snapshotInfo.lastSnapshot 
+                      ? `${snapshotInfo.lastSnapshot.platform} (${snapshotInfo.lastSnapshot.hk})`
+                      : '尚無記錄'
+                    }
+                    {' | '}
+                    下次快照: {snapshotInfo.nextSnapshot.platform} ({snapshotInfo.nextSnapshot.hk})
+                  </span>
+                </div>
+              )}
             </div>
+            </>
           )}
 
           {/* History Page Navigation */}

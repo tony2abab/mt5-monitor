@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 
 function Header({ summary, autoRefresh, onToggleRefresh, onRefresh, onRequestReport, username, selectedGroup, onLogout }) {
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -121,10 +122,23 @@ function Header({ summary, autoRefresh, onToggleRefresh, onRefresh, onRequestRep
               </button>
             )}
             <button
-              onClick={onRefresh}
-              className="px-4 py-2 bg-cyber-blue/20 hover:bg-cyber-blue/30 border border-cyber-blue/50 text-cyber-blue rounded-lg transition-all hover:cyber-glow"
+              onClick={async () => {
+                if (isRefreshing) return
+                setIsRefreshing(true)
+                try {
+                  await onRefresh()
+                } finally {
+                  setTimeout(() => setIsRefreshing(false), 500)
+                }
+              }}
+              disabled={isRefreshing}
+              className={`px-4 py-2 border rounded-lg transition-all ${
+                isRefreshing
+                  ? 'bg-cyber-green/30 border-cyber-green/50 text-cyber-green animate-pulse'
+                  : 'bg-cyber-blue/20 hover:bg-cyber-blue/30 border-cyber-blue/50 text-cyber-blue hover:cyber-glow'
+              }`}
             >
-              刷新
+              {isRefreshing ? '🔄 刷新中...' : '刷新'}
             </button>
             <button
               onClick={onToggleRefresh}

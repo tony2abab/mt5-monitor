@@ -585,8 +585,10 @@ class DatabaseManager {
             abStatsData = stmt.all(...allowedGroups);
         }
         
-        // 只有管理員可以看到無分組信息的舊數據（daily_snapshots）
-        if (isAdmin) {
+        // 只有管理員且查詢包含分組 A 時，才合併舊的 daily_snapshots 數據
+        // 舊數據都屬於分組 A，所以只有查詢分組 A 或全部時才顯示
+        const includesGroupA = allowedGroups.includes('A');
+        if (isAdmin && includesGroupA) {
             const dailySnapshots = this.getAllDailySnapshots();
             const abStatsDates = new Set(abStatsData.map(s => s.snapshot_date));
             const mergedData = [...abStatsData];
@@ -603,7 +605,75 @@ class DatabaseManager {
             return mergedData;
         }
         
-        // 非管理員只能看到有分組信息的數據
+        // 非管理員或不包含分組A時，只返回有分組信息的數據
+        return abStatsData;
+    }
+    
+    getDailyStatsByGroupsAndDateRange(allowedGroups = [], startDate, endDate, isAdmin = false) {
+        // 檢查 nodes 表是否有 client_group 欄位
+        const nodesInfo = this.db.prepare('PRAGMA table_info(nodes)').all();
+        const hasClientGroup = nodesInfo.some(col => col.name === 'client_group');
+        
+        // 從 ab_stats 獲取有分組信息的數據（新格式）
+        const statsInfo = this.db.prepare('PRAGMA table_info(ab_stats)').all();
+        const hasCommission = statsInfo.some(col => col.name === 'commission_per_lot');
+        
+        let abStatsData = [];
+        
+        if (hasClientGroup && allowedGroups && allowedGroups.length > 0) {
+            const placeholders = allowedGroups.map(() => '?').join(',');
+            const commissionExpr = hasCommission 
+                ? 'SUM(a.commission_per_lot * a.a_lots_total)' 
+                : '0';
+            
+            const stmt = this.db.prepare(`
+                SELECT 
+                    a.date as snapshot_date,
+                    COUNT(DISTINCT a.node_id) as total_nodes,
+                    SUM(a.a_lots_total) as total_a_lots,
+                    SUM(a.b_lots_total) as total_b_lots,
+                    SUM(a.lots_diff) as total_lots_diff,
+                    SUM(a.a_profit_total) as total_a_profit,
+                    SUM(a.b_profit_total) as total_b_profit,
+                    SUM(a.ab_profit_total) as total_ab_profit,
+                    SUM(a.a_interest_total) as total_a_interest,
+                    ${commissionExpr} as total_commission,
+                    CASE WHEN SUM(a.a_lots_total) > 0 
+                        THEN SUM(a.ab_profit_total) / SUM(a.a_lots_total) 
+                        ELSE 0 
+                    END as total_cost_per_lot
+                FROM ab_stats a
+                JOIN nodes n ON a.node_id = n.id
+                WHERE n.client_group IN (${placeholders})
+                  AND a.date >= ? AND a.date <= ?
+                GROUP BY a.date
+                ORDER BY a.date DESC
+            `);
+            
+            abStatsData = stmt.all(...allowedGroups, startDate, endDate);
+        }
+        
+        // 只有管理員且查詢包含分組 A 時，才合併舊的 daily_snapshots 數據
+        // 舊數據都屬於分組 A，所以只有查詢分組 A 或全部時才顯示
+        const includesGroupA = allowedGroups.includes('A');
+        if (isAdmin && includesGroupA) {
+            const dailySnapshots = this.getDailySnapshotsByDateRange(startDate, endDate);
+            const abStatsDates = new Set(abStatsData.map(s => s.snapshot_date));
+            const mergedData = [...abStatsData];
+            
+            // 添加 daily_snapshots 中不在 ab_stats 的日期（舊的歷史數據）
+            for (const snapshot of dailySnapshots) {
+                if (!abStatsDates.has(snapshot.snapshot_date)) {
+                    mergedData.push(snapshot);
+                }
+            }
+            
+            // 按日期降序排序
+            mergedData.sort((a, b) => b.snapshot_date.localeCompare(a.snapshot_date));
+            return mergedData;
+        }
+        
+        // 非管理員或不包含分組A時，只返回有分組信息的數據
         return abStatsData;
     }
     

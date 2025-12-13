@@ -124,7 +124,20 @@ function HistoryView({ allowedGroups = [], selectedGroup = '', username = '' }) 
     }
 
     try {
-      const response = await fetch(`/api/history/range?startDate=${startDate}&endDate=${endDate}`);
+      // 如果選擇了特定分組（非'all'），只查詢該分組；否則查詢所有允許的分組
+      const groupsToQuery = (selectedGroup && selectedGroup !== 'all')
+        ? [selectedGroup] 
+        : allowedGroups;
+      const params = new URLSearchParams();
+      params.set('startDate', startDate);
+      params.set('endDate', endDate);
+      if (groupsToQuery.length > 0) {
+        params.set('groups', groupsToQuery.join(','));
+      }
+      if (username) {
+        params.set('username', username);
+      }
+      const response = await fetch(`/api/history/range?${params.toString()}`);
       const data = await response.json();
       
       if (data.ok) {

@@ -692,7 +692,7 @@ router.get('/history/node', (req, res) => {
 // GET /api/history/range - Get daily snapshots within date range with summary
 router.get('/history/range', (req, res) => {
     try {
-        const { startDate, endDate } = req.query;
+        const { startDate, endDate, groups, username } = req.query;
         
         if (!startDate || !endDate) {
             return res.status(400).json({
@@ -701,7 +701,18 @@ router.get('/history/range', (req, res) => {
             });
         }
         
-        const snapshots = db.getDailySnapshotsByDateRange(startDate, endDate);
+        const allowedGroups = groups ? groups.split(',') : [];
+        const isAdmin = username === 'A';
+        
+        // 根據分組過濾數據
+        let snapshots;
+        if (allowedGroups.length > 0) {
+            snapshots = db.getDailyStatsByGroupsAndDateRange(allowedGroups, startDate, endDate, isAdmin);
+        } else if (isAdmin) {
+            snapshots = db.getDailySnapshotsByDateRange(startDate, endDate);
+        } else {
+            snapshots = [];
+        }
         
         // Calculate summary for the range
         const summary = {
