@@ -127,32 +127,6 @@ function Header({ summary, autoRefresh, onToggleRefresh, onRefresh, onRequestRep
               刷新
             </button>
             <button
-              onClick={async () => {
-                try {
-                  const response = await fetch('/api/request-report', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({})
-                  });
-                  const data = await response.json();
-                  if (data.ok) {
-                    alert('✓ 已發送上報請求給所有MT5');
-                    // 通知父組件刷新快照信息
-                    if (onRequestReport) {
-                      onRequestReport();
-                    }
-                  } else {
-                    alert('✗ 發送失敗：' + data.error);
-                  }
-                } catch (err) {
-                  alert('✗ 網絡錯誤：' + err.message);
-                }
-              }}
-              className="px-4 py-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-500/50 text-yellow-400 rounded-lg transition-all hover:shadow-lg hover:shadow-yellow-500/20"
-            >
-              要求MT5上報數據
-            </button>
-            <button
               onClick={onToggleRefresh}
               className={`px-4 py-2 border rounded-lg transition-all ${
                 autoRefresh

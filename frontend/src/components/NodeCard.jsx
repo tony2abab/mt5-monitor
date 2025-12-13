@@ -1,9 +1,19 @@
 function NodeCard({ node, onHide }) {
-  const { id, name, broker, account, status, lastHeartbeatRelative, lastStatsRelative, todayABStats, todayStats, meta } = node
+  const { id, name, broker, account, status, lastHeartbeatRelative, lastStatsRelative, todayABStats, todayStats, meta,
+          open_buy_lots, open_sell_lots, floating_pl, balance, equity } = node
   const isOnline = status === 'online'
   
   // 優先使用 A/B 統計數據，沒有則使用舊格式（向後兼容）
   const stats = todayABStats || todayStats
+  
+  // 檢查是否有場上數據（Monitor_OnlyHeartbeat 模式）
+  const hasOpenData = (
+    (open_buy_lots != null && open_buy_lots > 0) || 
+    (open_sell_lots != null && open_sell_lots > 0) || 
+    (floating_pl != null && floating_pl !== 0) ||
+    (balance != null && balance > 0) || 
+    (equity != null && equity > 0)
+  )
 
   return (
     <div
@@ -183,6 +193,49 @@ function NodeCard({ node, onHide }) {
             尚無統計數據
           </div>
         )
+      ) : hasOpenData ? (
+        // 顯示場上數據（Monitor_OnlyHeartbeat 模式）
+        <div className="space-y-1">
+          <div className="text-center text-xs text-yellow-400 mb-1 border-b border-yellow-400/30 pb-1">
+            只顯示場上手數盈虧
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-white min-w-[90px]">Buy手數:</span>
+            <span className="text-xs font-medium text-cyan-400 ml-auto">
+              {(open_buy_lots ?? 0).toFixed(2)}
+            </span>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-white min-w-[90px]">Sell手數:</span>
+            <span className="text-xs font-medium text-cyan-400 ml-auto">
+              {(open_sell_lots ?? 0).toFixed(2)}
+            </span>
+          </div>
+          
+          <div className="flex items-center gap-2 border-t border-gray-400/50 pt-1">
+            <span className="text-sm text-cyan-400 min-w-[90px]">浮動盈虧:</span>
+            <span className={`text-sm font-bold ml-auto ${
+              (floating_pl ?? 0) >= 0 ? 'text-cyber-green' : 'text-red-400'
+            }`}>
+              {(floating_pl ?? 0) >= 0 ? '+' : ''}{(floating_pl ?? 0).toFixed(2)}
+            </span>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-white min-w-[90px]">餘額:</span>
+            <span className="text-xs font-medium text-gray-300 ml-auto">
+              {(balance ?? 0).toFixed(2)}
+            </span>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-white min-w-[90px]">淨值:</span>
+            <span className="text-xs font-medium text-white ml-auto">
+              {(equity ?? 0).toFixed(2)}
+            </span>
+          </div>
+        </div>
       ) : (
         <div className="text-center py-2 text-gray-600 text-[10px]">
           暫無當日統計資料

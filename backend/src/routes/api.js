@@ -161,7 +161,11 @@ router.get('/auth/stats', authMiddleware, (req, res) => {
 // POST /api/heartbeat - Receive heartbeat from MT5 EA (requires auth)
 router.post('/heartbeat', authMiddleware, (req, res) => {
     try {
-        const { id, name, broker, account, meta, client_group } = req.body;
+        const { 
+            id, name, broker, account, meta, client_group,
+            // Monitor_OnlyHeartbeat 模式的場上數據
+            open_buy_lots, open_sell_lots, floating_pl, balance, equity
+        } = req.body;
         
         // Validation - name 已不再必需，改用 id 作為唯一識別
         if (!id) {
@@ -175,8 +179,11 @@ router.post('/heartbeat', authMiddleware, (req, res) => {
         const oldNode = db.getNode(id);
         const oldStatus = oldNode ? oldNode.status : null;
         
-        // Upsert node with heartbeat
-        db.upsertNode({ id, name, broker, account, meta, client_group });
+        // Upsert node with heartbeat (including open position data if provided)
+        db.upsertNode({ 
+            id, name, broker, account, meta, client_group,
+            open_buy_lots, open_sell_lots, floating_pl, balance, equity
+        });
         // When heartbeat is received, ensure node is no longer muted
         heartbeatService.unmuteNode(id);
         
@@ -244,14 +251,26 @@ router.post('/heartbeat', authMiddleware, (req, res) => {
     }
 });
 
-// POST /api/nodes/clear-stats - Clear all collected stats data (keep heartbeats)
+// POST /api/nodes/clear-stats - Clear today's stats for selected group (keep heartbeats and history)
 router.post('/nodes/clear-stats', (req, res) => {
     try {
-        db.clearAllStats();
-        db.clearAllABStats();
+        const { group } = req.body;  // 可選的分組參數
+        const today = new Date().toISOString().split('T')[0];  // 只清除今天的數據
+        
+        // 清除今天的統計數據（根據分組）
+        db.clearTodayStats(today, group || null);
+        db.clearTodayABStats(today, group || null);
+        
+        // 同時清除 nodes 表中的場上數據（Monitor_OnlyHeartbeat 模式的數據）
+        db.clearNodesOpenData(group || null);
+        
         res.json({
             ok: true,
-            message: 'All statistics cleared successfully',
+            message: group 
+                ? `分組 ${group} 的今日統計數據已清除` 
+                : '所有分組的今日統計數據已清除',
+            clearedDate: today,
+            clearedGroup: group || 'all',
             serverTime: new Date().toISOString()
         });
     } catch (error) {
@@ -401,13 +420,31 @@ router.get('/nodes', (req, res) => {
             const abStats = abStatsMap[node.id] || null;
             const stats = statsMap[node.id] || null;
             
+            // 對於 Monitor_OnlyHeartbeat 模式，如果有場上數據但沒有統計數據，顯示心跳時間
+            let lastStatsRelative = null;
+            // 檢查是否有場上數據（任一欄位有非 null/undefined 且有意義的值）
+            const hasOpenData = (
+                (node.open_buy_lots != null && node.open_buy_lots > 0) || 
+                (node.open_sell_lots != null && node.open_sell_lots > 0) || 
+                (node.floating_pl != null && node.floating_pl !== 0) || 
+                (node.balance != null && node.balance > 0) || 
+                (node.equity != null && node.equity > 0)
+            );
+            
+            if (abStats && abStats.reported_at) {
+                lastStatsRelative = getRelativeTime(new Date(abStats.reported_at));
+            } else if (hasOpenData && node.last_heartbeat) {
+                // Monitor_OnlyHeartbeat 模式：顯示心跳時間作為最後更新時間
+                lastStatsRelative = getRelativeTime(new Date(node.last_heartbeat)) + ' (場上)';
+            }
+            
             return {
                 ...node,
                 status,
                 todayABStats: abStats,  // 新的 A/B 統計數據
                 todayStats: stats,      // 保留舊的統計數據（向後兼容）
                 lastHeartbeatRelative: node.last_heartbeat ? getRelativeTime(new Date(node.last_heartbeat)) : 'Never',
-                lastStatsRelative: abStats && abStats.reported_at ? getRelativeTime(new Date(abStats.reported_at)) : null
+                lastStatsRelative
             };
         });
         
@@ -569,17 +606,22 @@ router.post('/nodes/resend-offline', async (req, res) => {
 router.get('/history', (req, res) => {
     try {
         const groupsParam = req.query.groups;
+        const username = req.query.username;  // 前端傳遞用戶名
         const allowedGroups = groupsParam ? groupsParam.split(',') : [];
         
+        // 用戶 A 是管理員，可以看到無分組信息的舊數據
+        const isAdmin = username === 'A';
+        
         const snapshots = allowedGroups.length > 0 
-            ? db.getDailyStatsByGroups(allowedGroups)
-            : db.getAllDailySnapshots();
+            ? db.getDailyStatsByGroups(allowedGroups, isAdmin)
+            : (isAdmin ? db.getAllDailySnapshots() : []);
         
         res.json({
             ok: true,
             snapshots,
             count: snapshots.length,
             groups: allowedGroups,
+            isAdmin,
             serverTime: new Date().toISOString()
         });
     } catch (error) {

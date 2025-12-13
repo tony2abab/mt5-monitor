@@ -1,9 +1,10 @@
-require('dotenv').config();
+const path = require('path');
+// 從項目根目錄讀取 .env（上兩層目錄）
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
-const path = require('path');
 
 const authMiddleware = require('./middleware/auth');
 const auditMiddleware = require('./middleware/audit');
@@ -11,6 +12,7 @@ const apiRoutes = require('./routes/api');
 const heartbeatService = require('./services/heartbeat');
 const snapshotService = require('./services/snapshot');
 const schedulerService = require('./services/scheduler');
+const backupService = require('./services/backup');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -82,12 +84,16 @@ const schedulerConfig = {
 };
 schedulerService.start(schedulerConfig);
 
+// Start backup service (daily database backup with 7-day retention)
+backupService.start();
+
 // Graceful shutdown
 process.on('SIGINT', () => {
     console.log('\nShutting down gracefully...');
     heartbeatService.stop();
     snapshotService.stop();
     schedulerService.stop();
+    backupService.stop();
     process.exit(0);
 });
 

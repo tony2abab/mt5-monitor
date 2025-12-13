@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Calendar, TrendingUp, DollarSign, Activity, User } from 'lucide-react';
 
-function HistoryView({ allowedGroups = [], selectedGroup = '' }) {
+function HistoryView({ allowedGroups = [], selectedGroup = '', username = '' }) {
   const [snapshots, setSnapshots] = useState([]);
   const [filteredSnapshots, setFilteredSnapshots] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -89,8 +89,15 @@ function HistoryView({ allowedGroups = [], selectedGroup = '' }) {
       const groupsToQuery = (selectedGroup && selectedGroup !== 'all')
         ? [selectedGroup] 
         : allowedGroups;
-      const groupsParam = groupsToQuery.length > 0 ? `?groups=${groupsToQuery.join(',')}` : '';
-      const response = await fetch(`/api/history${groupsParam}`);
+      const params = new URLSearchParams();
+      if (groupsToQuery.length > 0) {
+        params.set('groups', groupsToQuery.join(','));
+      }
+      if (username) {
+        params.set('username', username);
+      }
+      const queryString = params.toString() ? `?${params.toString()}` : '';
+      const response = await fetch(`/api/history${queryString}`);
       const data = await response.json();
       
       if (data.ok) {
@@ -601,21 +608,21 @@ function HistoryView({ allowedGroups = [], selectedGroup = '' }) {
       {/* 歷史數據表格 */}
       <div className="bg-cyber-darker/60 rounded-xl cyber-border overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-max">
             <thead className="bg-gray-800/50">
               <tr>
-                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-300">日期</th>
-                <th className="px-3 py-3 text-center text-xs font-semibold text-gray-300">節點</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300">A手數</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300">B手數</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300">手數差</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300">A盈利</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300">B盈利</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300">AB總盈虧</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300">A總息</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300">總回佣</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300">每手成本</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300">總盈含息佣</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-300 whitespace-nowrap">日期</th>
+                <th className="px-3 py-3 text-center text-xs font-semibold text-gray-300 whitespace-nowrap">節點</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300 whitespace-nowrap">A手數</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300 whitespace-nowrap">B手數</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300 whitespace-nowrap">手數差</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300 whitespace-nowrap">A盈利</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300 whitespace-nowrap">B盈利</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300 whitespace-nowrap">AB總盈虧</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300 whitespace-nowrap">A總息</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300 whitespace-nowrap">總回佣</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300 whitespace-nowrap">每手成本</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-300 whitespace-nowrap">總盈含息佣</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700/50">
@@ -628,50 +635,50 @@ function HistoryView({ allowedGroups = [], selectedGroup = '' }) {
               ) : (
                 displayedSnapshots.map((snapshot) => (
                   <tr key={snapshot.id} className="hover:bg-gray-800/30 transition-colors">
-                    <td className="px-3 py-3 text-xs text-white font-medium">
+                    <td className="px-3 py-3 text-xs text-white font-medium whitespace-nowrap">
                       {snapshot.snapshot_date}
                     </td>
-                    <td className="px-3 py-3 text-xs text-center text-gray-300">
+                    <td className="px-3 py-3 text-xs text-center text-gray-300 whitespace-nowrap">
                       {snapshot.total_nodes}
                     </td>
-                    <td className="px-3 py-3 text-xs text-right text-cyan-400">
+                    <td className="px-3 py-3 text-xs text-right text-cyan-400 whitespace-nowrap">
                       {(snapshot.total_a_lots || 0).toFixed(2)}
                     </td>
-                    <td className="px-3 py-3 text-xs text-right text-cyan-400">
+                    <td className="px-3 py-3 text-xs text-right text-cyan-400 whitespace-nowrap">
                       {(snapshot.total_b_lots || 0).toFixed(2)}
                     </td>
-                    <td className={`px-3 py-3 text-xs text-right font-medium ${
+                    <td className={`px-3 py-3 text-xs text-right font-medium whitespace-nowrap ${
                       (snapshot.total_lots_diff || 0) !== 0 ? 'text-red-400' : 'text-gray-300'
                     }`}>
                       {(snapshot.total_lots_diff || 0) >= 0 ? '+' : ''}{(snapshot.total_lots_diff || 0).toFixed(2)}
                     </td>
-                    <td className={`px-3 py-3 text-xs text-right font-medium ${
+                    <td className={`px-3 py-3 text-xs text-right font-medium whitespace-nowrap ${
                       (snapshot.total_a_profit || 0) >= 0 ? 'text-cyber-green' : 'text-red-400'
                     }`}>
                       {(snapshot.total_a_profit || 0) >= 0 ? '+' : ''}{(snapshot.total_a_profit || 0).toFixed(2)}
                     </td>
-                    <td className={`px-3 py-3 text-xs text-right font-medium ${
+                    <td className={`px-3 py-3 text-xs text-right font-medium whitespace-nowrap ${
                       (snapshot.total_b_profit || 0) >= 0 ? 'text-cyber-green' : 'text-red-400'
                     }`}>
                       {(snapshot.total_b_profit || 0) >= 0 ? '+' : ''}{(snapshot.total_b_profit || 0).toFixed(2)}
                     </td>
-                    <td className={`px-3 py-3 text-sm text-right font-bold ${
+                    <td className={`px-3 py-3 text-sm text-right font-bold whitespace-nowrap ${
                       (snapshot.total_ab_profit || 0) >= 0 ? 'text-cyber-green' : 'text-red-400'
                     }`}>
                       {(snapshot.total_ab_profit || 0) >= 0 ? '+' : ''}{(snapshot.total_ab_profit || 0).toFixed(2)}
                     </td>
-                    <td className="px-3 py-3 text-xs text-right text-cyan-400">
+                    <td className="px-3 py-3 text-xs text-right text-cyan-400 whitespace-nowrap">
                       {(snapshot.total_a_interest || 0).toFixed(2)}
                     </td>
-                    <td className="px-3 py-3 text-xs text-right text-cyan-400 font-medium">
+                    <td className="px-3 py-3 text-xs text-right text-cyan-400 font-medium whitespace-nowrap">
                       ${(snapshot.total_commission || 0).toFixed(2)}
                     </td>
-                    <td className={`px-3 py-3 text-xs text-right font-medium ${
+                    <td className={`px-3 py-3 text-xs text-right font-medium whitespace-nowrap ${
                       (snapshot.total_cost_per_lot || 0) >= 0 ? 'text-cyber-green' : 'text-red-400'
                     }`}>
                       {(snapshot.total_cost_per_lot || 0) >= 0 ? '+' : ''}{(snapshot.total_cost_per_lot || 0).toFixed(2)}
                     </td>
-                    <td className={`px-3 py-3 text-sm text-right font-bold ${
+                    <td className={`px-3 py-3 text-sm text-right font-bold whitespace-nowrap ${
                       ((snapshot.total_ab_profit || 0) + (snapshot.total_a_interest || 0) + (snapshot.total_commission || 0)) >= 0 ? 'text-cyber-green' : 'text-red-400'
                     }`}>
                       {((snapshot.total_ab_profit || 0) + (snapshot.total_a_interest || 0) + (snapshot.total_commission || 0)) >= 0 ? '+' : ''}{((snapshot.total_ab_profit || 0) + (snapshot.total_a_interest || 0) + (snapshot.total_commission || 0)).toFixed(2)}

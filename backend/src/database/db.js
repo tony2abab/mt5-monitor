@@ -7,10 +7,24 @@ class DatabaseManager {
         const dbPath = process.env.DB_PATH || path.join(__dirname, '../../data/monitor.db');
         const dbDir = path.dirname(dbPath);
         
+        // 顯示資料庫路徑（用於調試）
+        console.log('=== Database Configuration ===');
+        console.log('DB_PATH env:', process.env.DB_PATH || '(not set)');
+        console.log('Using database:', dbPath);
+        
         // Ensure data directory exists
         if (!fs.existsSync(dbDir)) {
             fs.mkdirSync(dbDir, { recursive: true });
         }
+        
+        // 檢查資料庫文件大小
+        if (fs.existsSync(dbPath)) {
+            const stats = fs.statSync(dbPath);
+            console.log('Database size:', (stats.size / 1024).toFixed(2), 'KB');
+        } else {
+            console.log('Database file does not exist, will be created');
+        }
+        console.log('==============================');
         
         this.db = new Database(dbPath);
         this.db.pragma('journal_mode = WAL');
@@ -21,31 +35,99 @@ class DatabaseManager {
         const schemaPath = path.join(__dirname, 'schema.sql');
         const schema = fs.readFileSync(schemaPath, 'utf8');
         this.db.exec(schema);
+        
+        // 資料庫遷移：為現有 nodes 表添加場上數據欄位
+        this.migrateNodesTable();
+        
         console.log('Database initialized successfully');
+    }
+    
+    // 資料庫遷移：添加場上數據欄位到 nodes 表
+    migrateNodesTable() {
+        const columns = [
+            { name: 'open_buy_lots', type: 'REAL DEFAULT 0' },
+            { name: 'open_sell_lots', type: 'REAL DEFAULT 0' },
+            { name: 'floating_pl', type: 'REAL DEFAULT 0' },
+            { name: 'balance', type: 'REAL DEFAULT 0' },
+            { name: 'equity', type: 'REAL DEFAULT 0' }
+        ];
+        
+        for (const col of columns) {
+            try {
+                // 檢查欄位是否存在
+                const tableInfo = this.db.prepare("PRAGMA table_info(nodes)").all();
+                const columnExists = tableInfo.some(c => c.name === col.name);
+                
+                if (!columnExists) {
+                    this.db.exec(`ALTER TABLE nodes ADD COLUMN ${col.name} ${col.type}`);
+                    console.log(`Migration: Added column ${col.name} to nodes table`);
+                }
+            } catch (err) {
+                // 欄位可能已存在，忽略錯誤
+                if (!err.message.includes('duplicate column')) {
+                    console.error(`Migration error for ${col.name}:`, err.message);
+                }
+            }
+        }
     }
     
     // Node operations
     upsertNode(nodeData) {
-        const { id, name, broker, account, meta, client_group } = nodeData;
+        const { 
+            id, name, broker, account, meta, client_group,
+            // Monitor_OnlyHeartbeat 模式的場上數據
+            open_buy_lots, open_sell_lots, floating_pl, balance, equity
+        } = nodeData;
         const metaJson = meta ? JSON.stringify(meta) : null;
-        // å¦‚æ?æ²’æ??�ä? nameï¼Œä½¿??id ä½œç‚º nameï¼ˆå?å¾Œå…¼å®¹ï?
+        // 如果沒有提供 name，使用 id 作為 name（向後兼容）
         const nodeName = name || id;
         
-        const stmt = this.db.prepare(`
-            INSERT INTO nodes (id, name, broker, account, client_group, meta, last_heartbeat, status, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 'online', datetime('now'))
-            ON CONFLICT(id) DO UPDATE SET
-                name = COALESCE(excluded.name, name, excluded.id),
-                broker = excluded.broker,
-                account = excluded.account,
-                client_group = COALESCE(excluded.client_group, client_group, 'A'),
-                meta = excluded.meta,
-                last_heartbeat = excluded.last_heartbeat,
-                status = 'online',
-                updated_at = datetime('now')
-        `);
+        // 檢查是否有場上數據
+        const hasOpenData = open_buy_lots !== undefined || open_sell_lots !== undefined || 
+                           floating_pl !== undefined || balance !== undefined || equity !== undefined;
         
-        return stmt.run(id, nodeName, broker, account, client_group || 'A', metaJson);
+        if (hasOpenData) {
+            // 包含場上數據的更新
+            const stmt = this.db.prepare(`
+                INSERT INTO nodes (id, name, broker, account, client_group, meta, last_heartbeat, status, updated_at,
+                                   open_buy_lots, open_sell_lots, floating_pl, balance, equity)
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 'online', datetime('now'), ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = COALESCE(excluded.name, name, excluded.id),
+                    broker = excluded.broker,
+                    account = excluded.account,
+                    client_group = COALESCE(excluded.client_group, client_group, 'A'),
+                    meta = excluded.meta,
+                    last_heartbeat = excluded.last_heartbeat,
+                    status = 'online',
+                    updated_at = datetime('now'),
+                    open_buy_lots = excluded.open_buy_lots,
+                    open_sell_lots = excluded.open_sell_lots,
+                    floating_pl = excluded.floating_pl,
+                    balance = excluded.balance,
+                    equity = excluded.equity
+            `);
+            
+            return stmt.run(id, nodeName, broker, account, client_group || 'A', metaJson,
+                           open_buy_lots || 0, open_sell_lots || 0, floating_pl || 0, balance || 0, equity || 0);
+        } else {
+            // 普通心跳（不更新場上數據）
+            const stmt = this.db.prepare(`
+                INSERT INTO nodes (id, name, broker, account, client_group, meta, last_heartbeat, status, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 'online', datetime('now'))
+                ON CONFLICT(id) DO UPDATE SET
+                    name = COALESCE(excluded.name, name, excluded.id),
+                    broker = excluded.broker,
+                    account = excluded.account,
+                    client_group = COALESCE(excluded.client_group, client_group, 'A'),
+                    meta = excluded.meta,
+                    last_heartbeat = excluded.last_heartbeat,
+                    status = 'online',
+                    updated_at = datetime('now')
+            `);
+            
+            return stmt.run(id, nodeName, broker, account, client_group || 'A', metaJson);
+        }
     }
     
     getNode(id) {
@@ -287,6 +369,58 @@ class DatabaseManager {
         return stmt.run();
     }
     
+    // 清除今天的統計數據（根據分組）
+    clearTodayStats(date, group = null) {
+        if (group) {
+            // 只清除指定分組的今天數據
+            const stmt = this.db.prepare(`
+                DELETE FROM stats 
+                WHERE date = ? 
+                AND node_id IN (SELECT id FROM nodes WHERE client_group = ?)
+            `);
+            return stmt.run(date, group);
+        } else {
+            // 清除所有分組的今天數據
+            const stmt = this.db.prepare('DELETE FROM stats WHERE date = ?');
+            return stmt.run(date);
+        }
+    }
+    
+    // 清除今天的 AB 統計數據（根據分組）
+    clearTodayABStats(date, group = null) {
+        if (group) {
+            // 只清除指定分組的今天數據
+            const stmt = this.db.prepare(`
+                DELETE FROM ab_stats 
+                WHERE date = ? 
+                AND node_id IN (SELECT id FROM nodes WHERE client_group = ?)
+            `);
+            return stmt.run(date, group);
+        } else {
+            // 清除所有分組的今天數據
+            const stmt = this.db.prepare('DELETE FROM ab_stats WHERE date = ?');
+            return stmt.run(date);
+        }
+    }
+    
+    // 清除 nodes 表中的場上數據（Monitor_OnlyHeartbeat 模式的數據）
+    clearNodesOpenData(group = null) {
+        if (group) {
+            const stmt = this.db.prepare(`
+                UPDATE nodes 
+                SET open_buy_lots = 0, open_sell_lots = 0, floating_pl = 0, balance = 0, equity = 0
+                WHERE client_group = ?
+            `);
+            return stmt.run(group);
+        } else {
+            const stmt = this.db.prepare(`
+                UPDATE nodes 
+                SET open_buy_lots = 0, open_sell_lots = 0, floating_pl = 0, balance = 0, equity = 0
+            `);
+            return stmt.run();
+        }
+    }
+    
     // State transition operations
     addStateTransition(nodeId, fromStatus, toStatus) {
         const stmt = this.db.prepare(`
@@ -403,56 +537,74 @@ class DatabaseManager {
     
     /**
      * 按分組獲取每日歷史統計數據
+     * 合併 ab_stats（新格式，有分組）和 daily_snapshots（舊格式，無分組）的數據
      * @param {Array} allowedGroups - 允許的分組列表，如 ['A', 'B'] 或 ['C']
+     * @param {boolean} isAdmin - 是否為管理員用戶（只有管理員可以看到無分組信息的舊數據）
      * @returns {Array} 每日統計數據
      */
-    getDailyStatsByGroups(allowedGroups = []) {
-        if (!allowedGroups || allowedGroups.length === 0) {
-            return this.getAllDailySnapshots();
-        }
-        
+    getDailyStatsByGroups(allowedGroups = [], isAdmin = false) {
         // 檢查 nodes 表是否有 client_group 欄位
         const nodesInfo = this.db.prepare('PRAGMA table_info(nodes)').all();
         const hasClientGroup = nodesInfo.some(col => col.name === 'client_group');
         
-        if (!hasClientGroup) {
-            // 如果沒有 client_group 欄位，返回所有數據
-            return this.getAllDailySnapshots();
-        }
-        
-        // 檢查 ab_stats 表是否有 commission_per_lot 欄位
+        // 從 ab_stats 獲取有分組信息的數據（新格式）
         const statsInfo = this.db.prepare('PRAGMA table_info(ab_stats)').all();
         const hasCommission = statsInfo.some(col => col.name === 'commission_per_lot');
         
-        const placeholders = allowedGroups.map(() => '?').join(',');
-        const commissionExpr = hasCommission 
-            ? 'SUM(a.commission_per_lot * a.a_lots_total)' 
-            : '0';
+        let abStatsData = [];
         
-        const stmt = this.db.prepare(`
-            SELECT 
-                a.date as snapshot_date,
-                COUNT(DISTINCT a.node_id) as total_nodes,
-                SUM(a.a_lots_total) as total_a_lots,
-                SUM(a.b_lots_total) as total_b_lots,
-                SUM(a.lots_diff) as total_lots_diff,
-                SUM(a.a_profit_total) as total_a_profit,
-                SUM(a.b_profit_total) as total_b_profit,
-                SUM(a.ab_profit_total) as total_ab_profit,
-                SUM(a.a_interest_total) as total_a_interest,
-                ${commissionExpr} as total_commission,
-                CASE WHEN SUM(a.a_lots_total) > 0 
-                    THEN SUM(a.ab_profit_total) / SUM(a.a_lots_total) 
-                    ELSE 0 
-                END as total_cost_per_lot
-            FROM ab_stats a
-            JOIN nodes n ON a.node_id = n.id
-            WHERE n.client_group IN (${placeholders})
-            GROUP BY a.date
-            ORDER BY a.date DESC
-        `);
+        if (hasClientGroup && allowedGroups && allowedGroups.length > 0) {
+            const placeholders = allowedGroups.map(() => '?').join(',');
+            const commissionExpr = hasCommission 
+                ? 'SUM(a.commission_per_lot * a.a_lots_total)' 
+                : '0';
+            
+            const stmt = this.db.prepare(`
+                SELECT 
+                    a.date as snapshot_date,
+                    COUNT(DISTINCT a.node_id) as total_nodes,
+                    SUM(a.a_lots_total) as total_a_lots,
+                    SUM(a.b_lots_total) as total_b_lots,
+                    SUM(a.lots_diff) as total_lots_diff,
+                    SUM(a.a_profit_total) as total_a_profit,
+                    SUM(a.b_profit_total) as total_b_profit,
+                    SUM(a.ab_profit_total) as total_ab_profit,
+                    SUM(a.a_interest_total) as total_a_interest,
+                    ${commissionExpr} as total_commission,
+                    CASE WHEN SUM(a.a_lots_total) > 0 
+                        THEN SUM(a.ab_profit_total) / SUM(a.a_lots_total) 
+                        ELSE 0 
+                    END as total_cost_per_lot
+                FROM ab_stats a
+                JOIN nodes n ON a.node_id = n.id
+                WHERE n.client_group IN (${placeholders})
+                GROUP BY a.date
+                ORDER BY a.date DESC
+            `);
+            
+            abStatsData = stmt.all(...allowedGroups);
+        }
         
-        return stmt.all(...allowedGroups);
+        // 只有管理員可以看到無分組信息的舊數據（daily_snapshots）
+        if (isAdmin) {
+            const dailySnapshots = this.getAllDailySnapshots();
+            const abStatsDates = new Set(abStatsData.map(s => s.snapshot_date));
+            const mergedData = [...abStatsData];
+            
+            // 添加 daily_snapshots 中不在 ab_stats 的日期（舊的歷史數據）
+            for (const snapshot of dailySnapshots) {
+                if (!abStatsDates.has(snapshot.snapshot_date)) {
+                    mergedData.push(snapshot);
+                }
+            }
+            
+            // 按日期降序排序
+            mergedData.sort((a, b) => b.snapshot_date.localeCompare(a.snapshot_date));
+            return mergedData;
+        }
+        
+        // 非管理員只能看到有分組信息的數據
+        return abStatsData;
     }
     
     getDailySnapshotByDate(date) {
@@ -461,6 +613,14 @@ class DatabaseManager {
             WHERE snapshot_date = ?
         `);
         return stmt.get(date);
+    }
+    
+    deleteDailySnapshot(date) {
+        const stmt = this.db.prepare(`
+            DELETE FROM daily_snapshots 
+            WHERE snapshot_date = ?
+        `);
+        return stmt.run(date);
     }
     
     getDailySnapshotsByDateRange(startDate, endDate) {

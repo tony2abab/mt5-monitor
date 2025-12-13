@@ -1,0 +1,500 @@
+﻿bool Check_TimeSession(bool &weekday_enable[],int aStartHour,int aStartMinute,int aStopHour,int aStopMinute,datetime aTimeCur) {
+    int day_of_week_ = TimeDayOfWeek(aTimeCur);
+    if(weekday_enable[day_of_week_] == false)
+        return false;
+    int StartTime =3600 * aStartHour + 60 * aStartMinute;
+    int StopTime = 3600*aStopHour+60*aStopMinute;
+    aTimeCur = aTimeCur % 86400;
+    if(StopTime<StartTime) {
+        if(aTimeCur>=StartTime || aTimeCur<StopTime) {
+            return(true);
+        }
+    } else {
+        if(aTimeCur>=StartTime && aTimeCur<StopTime) {
+            return(true);
+        }
+    }
+    return(false);
+}
+
+int get_history_ticket_by_position(int argPositionNumber) {
+    int nPos=0;
+    int history_trade_total=HistoryTotal();
+    if(history_trade_total > 0)
+        if(OrderSelect(history_trade_total - argPositionNumber,SELECT_BY_POS,MODE_HISTORY)==true) {
+            return OrderTicket();
+        }
+    return 0;
+}
+
+int get_history_int_by_ticket(int argTicket, int argTypeInfo) {
+    int history_trade_total=HistoryTotal();
+    if(history_trade_total > 0)
+        if(OrderSelect(argTicket ,SELECT_BY_TICKET,MODE_HISTORY)==true) {
+            switch (argTypeInfo) {
+                case 0:
+                    return (int)OrderOpenTime();
+                case 1:
+                    return (int)OrderCloseTime();
+                case 2:
+                    return OrderMagicNumber();
+            }
+        }
+    return 0;
+}
+
+datetime convert_to_datetime(int argYear, int argMonth, int argDay, int argHour, int argMinu) {
+    string spec_time = string(argYear)+"."+string(argMonth)+"."+string(argDay)+" "+string(argHour)+":"+string(argMinu);
+    datetime spec_datetime = StringToTime(spec_time);
+    return(spec_datetime);
+}
+
+string get_history_string_by_ticket(int argTicket, int argTypeInfo) {
+    int history_trade_total=HistoryTotal();
+    if(history_trade_total > 0)
+        if(OrderSelect(argTicket ,SELECT_BY_TICKET,MODE_HISTORY)==true) {
+            switch (argTypeInfo) {
+                case 0:
+                    return OrderSymbol();
+                case 1:
+                    return OrderComment();
+            }
+        }
+    return "";
+}
+
+double get_history_double_by_ticket(int argTicket, int argTypeInfo) {
+    int history_trade_total=HistoryTotal();
+    if(history_trade_total > 0) {
+        if(OrderSelect(argTicket ,SELECT_BY_TICKET,MODE_HISTORY)==true) {
+            switch (argTypeInfo) {
+                case 0:
+                    return OrderLots();
+                case 1:
+                    return OrderOpenPrice();
+                case 2:
+                    return OrderStopLoss();
+                case 3:
+                    return OrderTakeProfit();
+                case 4:
+                    return OrderClosePrice();
+                case 5:
+                    return OrderSwap();
+                case 6:
+                    return OrderProfit();
+                case 7:
+                    return OrderCommission();
+            }
+        }
+    }
+    return 0;
+}
+
+void telegram_push_messages_(string telegram_token, string telegram_chatid, string telegram_messages) {
+    int    res;
+    char   data[];
+    string headers="";
+    string  str;
+    str = "chat_id="+telegram_chatid+"&text="+telegram_messages;
+    ArrayResize(data,StringToCharArray(str,data,0,WHOLE_ARRAY, CP_UTF8)-1);
+    string requestLine = "https://api.telegram.org/"+telegram_token+"/sendMessage";
+    res=WebRequest("POST",requestLine,headers,0,data,data,str);
+    if(res!=200)
+        Print("Authorization error #"+(string)res+", LastError="+(string)GetLastError());
+    return;
+}
+
+// ========== 原有全域變數 ==========
+int  檔案代碼 = 0;
+ulong  迴圈成交單號 = 0;
+int  開始 = 0;
+double  A盈利總數 = 0;
+double  A手數總數 = 0;
+double  B盈利總數 = 0;
+double  B手數總數 = 0;
+int  開始_年 = 0;
+int  開始_月 = 0;
+int  開始_日 = 0;
+int  開始_時_變數 = 0;
+int  開始_分_變數 = 0;
+int  Kbar數2 = 0;
+double  檔名_手數_write = 0;
+double  檔名_盈利_write = 0;
+string  input_檔名_手數 = "";
+string  input_檔名_盈利 = "";
+double  匯率變數 = 0;
+int  結束_年 = 0;
+int  結束_月 = 0;
+int  結束_日 = 0;
+int  結束_時_變數 = 0;
+int  結束_分_變數 = 0;
+int  GMT按鈕狀態 = 1;
+double  檔名_GMT按鈕_write = 0;
+string  input_檔名_GMT按鈕 = "";
+double  檔名_A要求開始_write = 0;
+string  input_檔名_A要求開始 = "";
+int  A要求開始_狀態 = 0;
+int  今天 = 0;
+int  已發出TG通知1 = 0;
+int  S4_時_變數 = 0;
+int  S4_分加一 = 0;
+int  Step4時間已進入1 = 0;
+int  Step4時間已進入2 = 0;
+int  Step4時間已進入3 = 0;
+int  是夏令時間 = 1;
+int  測試TG通知 = 0;
+double  A總息 = 0;
+
+// ========== 新增：WebMonitor 全域變數 ==========
+datetime g_lastHeartbeat = 0;
+datetime g_lastStatsReport = 0;
+bool g_statsReportedToday = false;
+bool g_firstHeartbeatSuccess = false;  // 記錄是否已經打印過第一次心跳成功
+datetime g_lastReportPoll = 0;         // 上次輪詢時間
+bool g_reportRequested = false;        // 是否收到上報請求
+
+//B
+// ========== 新增：WebMonitor 函式 ==========
+
+/**
+ * 發送 HTTP 請求（帶重試機制）
+ * @param url 完整 URL
+ * @param jsonBody JSON 字串
+ * @param maxRetries 最大重試次數
+ * @return 成功返回 true
+ */
+bool SendHttpRequest(string url, string jsonBody, int maxRetries = 3) {
+    for(int attempt = 1; attempt <= maxRetries; attempt++) {
+        char data[];
+        char result[];
+        string headers = "Content-Type: application/json\r\nAuthorization: Bearer " + API_KEY + "\r\n";
+        
+        ArrayResize(data, StringToCharArray(jsonBody, data, 0, WHOLE_ARRAY, CP_UTF8) - 1);
+        
+        ResetLastError();
+        int res = WebRequest("POST", url, headers, 5000, data, result, headers);
+        int error = GetLastError();
+        
+        if(res == 200 || res == 201) {
+            if(EnableDebugLog) {
+                Print("✓ HTTP 請求成功: ", url);
+            }
+            return true;
+        } else {
+            Print("✗ HTTP 請求失敗 (嘗試 ", attempt, "/", maxRetries, ")");
+            Print("  HTTP Code: ", res);
+            Print("  Error Code: ", error);
+            Print("  URL: ", url);
+            
+            if(error == 4060) {
+                Print("  ⚠ WebRequest 未授權！請在 MT4 設定中添加 URL 到白名單：");
+                Print("  工具 → 選項 → 專家顧問 → 允許 WebRequest");
+                Print("  添加: ", API_BASE_URL);
+                return false; // WebRequest 未授權，不重試
+            }
+            
+            if(attempt < maxRetries) {
+                int waitMs = attempt * 1000; // 指數退避
+                Sleep(waitMs);
+            }
+        }
+    }
+    
+    Print("✗ HTTP 請求失敗，已達最大重試次數");
+    return false;
+}
+
+/**
+ * 發送心跳
+ */
+bool SendHeartbeat() {
+    string url = API_BASE_URL + "/heartbeat";
+    
+    string broker = AccountCompany();
+    if(broker == "") broker = "Unknown";
+    
+    string account = IntegerToString(AccountNumber());
+    
+    string jsonBody = "{";
+    jsonBody += "\"id\":\"" + 備註_VPS位置 + "\",";
+    jsonBody += "\"broker\":\"" + broker + "\",";
+    jsonBody += "\"account\":\"" + account + "\",";
+    jsonBody += "\"client_group\":\"" + ClientGroup + "\"";
+    jsonBody += "}";
+    if(Print_Heartbeat_Success) {
+        Print("發送心跳: ", TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS));
+    }
+    
+    bool success = SendHttpRequest(url, jsonBody, 3);
+    
+    if(success) {
+        g_lastHeartbeat = TimeCurrent();
+        if(!g_firstHeartbeatSuccess || Print_Heartbeat_Success) {
+            Print("✓ 心跳發送成功");
+            g_firstHeartbeatSuccess = true;
+        }
+    }
+    
+    return success;
+}
+
+/**
+ * 發送當日統計（完全參照 MT5 版本）
+ */
+// ==================== Web 監控：輪詢上報請求 ====================
+void CheckReportRequest()
+{
+   if(!Report_Mode_OnDemand) return;  // 非輪詢模式，不檢查
+   
+   datetime now = TimeCurrent();
+   if(now - g_lastReportPoll < Report_Poll_Seconds) return;  // 未到輪詢時間
+   
+   g_lastReportPoll = now;
+   
+   // 調用 API 檢查是否有上報請求
+   string url = API_BASE_URL + "/report-request?id=" + 備註_VPS位置;
+   
+   char post[], result[];
+   string headers = "Authorization: Bearer " + API_KEY + "\r\n";
+   
+   int res = WebRequest("GET", url, headers, 5000, post, result, headers);
+      
+   if(res == 200)
+   {
+      string response = CharArrayToString(result);
+      
+      // 解析 JSON 回應 {"requested": true/false}
+      if(StringFind(response, "\"requested\":true") >= 0 || 
+         StringFind(response, "\"requested\": true") >= 0)
+      {
+         Print("✓ 收到上報請求，觸發A要求開始流程");
+         // 觸發「A要求開始」流程，與按鈕效果相同
+         Step4時間已進入3 = 0;
+         Step4時間已進入2 = 0;
+         Step4時間已進入1 = 1;  // 觸發 A要求開始
+         g_reportRequested = true;  // 同時標記，用於後續發送數據到 Web
+      }
+   }
+   else
+   {
+      if(EnableDebugLog) {
+         Print("✗ 輪詢失敗 HTTP:", res, " Error:", GetLastError());
+      }
+   }
+}
+
+// ==================== Web 監控：A/B 統計 ====================
+void SendMonitorABStats()
+{
+   bool shouldSendData = false;
+
+   // 模式 A：輪詢模式 - 收到請求時發送
+   if(Report_Mode_OnDemand && g_reportRequested && !Monitor_OnlyHeartbeat)
+   {
+      shouldSendData = true;
+      g_reportRequested = false;  // 清標記
+      Print("輪詢模式：響應上報請求");
+   }
+   // 模式 B：定時模式 - 到達設定時間發送
+   else if(!Report_Mode_OnDemand && !Monitor_OnlyHeartbeat)
+   {
+      shouldSendData = true;
+      Print("定時模式：原有自動發送");
+   }
+      
+   if(!shouldSendData)
+      return;
+      
+   string url = API_BASE_URL + "/ab-stats";
+   
+   // 轉成 USD 後的 A 盈利
+   double a_profit_usd = (匯率變數 > 0.0) ? (A盈利總數 / 匯率變數) : A盈利總數;
+   double ab_total     = a_profit_usd + B盈利總數;
+   double lots_diff    = A手數總數 - B手數總數;
+   double cost_per_lot = (A手數總數 > 0.0) ? (ab_total / A手數總數) : 0.0;
+   
+   // 計算場上手數（當前未平倉的總手數）- MT4 版本
+   double open_lots = 0;
+   for(int i = OrdersTotal() - 1; i >= 0; i--)
+   {
+      if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
+      {
+         open_lots += OrderLots();
+      }
+   }
+   
+   // 構建日期字串
+   MqlDateTime tm;
+   TimeToStruct(TimeCurrent(), tm);
+   string today_date = StringFormat("%04d-%02d-%02d", tm.year, tm.mon, tm.day);
+   
+   // 構建 JSON（完全參照 MT5）
+   string payload = "{";
+   payload += "\"id\":\""              + 備註_VPS位置                            + "\",";
+   payload += "\"date\":\""            + today_date                        + "\",";
+   payload += "\"a_lots_total\":"      + DoubleToString(A手數總數, 2)     + ",";
+   payload += "\"b_lots_total\":"      + DoubleToString(B手數總數, 2)     + ",";
+   payload += "\"lots_diff\":"         + DoubleToString(lots_diff, 2)     + ",";
+   payload += "\"a_profit_total\":"    + DoubleToString(a_profit_usd, 2)  + ",";
+   payload += "\"b_profit_total\":"    + DoubleToString(B盈利總數, 2)     + ",";
+   payload += "\"ab_profit_total\":"   + DoubleToString(ab_total, 2)      + ",";
+   payload += "\"a_interest_total\":"  + DoubleToString(A總息, 2)         + ",";
+   payload += "\"cost_per_lot\":"      + DoubleToString(cost_per_lot, 2)  + ",";
+   payload += "\"commission_per_lot\":" + DoubleToString(Commission_Per_Lot, 2) + ",";
+   payload += "\"open_lots\":"         + DoubleToString(open_lots, 2) + ",";
+   payload += "\"client_group\":\"" + ClientGroup + "\"";
+   payload += "}";
+   if(EnableDebugLog) {
+       Print("=== 發送 A/B 統計 ===");
+       Print("  A手數:", A手數總數, " B手數:", B手數總數);
+       Print("  AB總盈利:", ab_total, " 每手成本:", cost_per_lot);
+       Print("  場上手數:", open_lots);
+   }
+   
+   bool success = SendHttpRequest(url, payload, 3);
+   
+   if(success) {
+       g_lastStatsReport = TimeCurrent();
+       g_statsReportedToday = true;
+       Print("✓ A/B統計發送成功");
+   }
+}
+
+// 保留舊函數名稱以兼容
+bool SendDailyStats() {
+    string url = API_BASE_URL + "/ab-stats";  // ← 改用 /ab-stats
+    
+    // 轉成 USD 後的 A 盈利
+    double a_profit_usd = (匯率變數 > 0.0) ? (A盈利總數 / 匯率變數) : A盈利總數;
+    double ab_total     = a_profit_usd + B盈利總數;
+    double lots_diff    = A手數總數 - B手數總數;
+    double cost_per_lot = (A手數總數 > 0.0) ? (ab_total / A手數總數) : 0.0;
+    
+    // 構建日期字串
+    MqlDateTime tm;
+    TimeToStruct(TimeCurrent(), tm);
+    string today_date = StringFormat("%04d-%02d-%02d", tm.year, tm.mon, tm.day);
+    
+    // 構建 JSON（完全參照 MT5）
+    string payload = "{";
+    payload += "\"id\":\""              + 備註_VPS位置                            + "\",";
+    payload += "\"date\":\""            + today_date                        + "\",";
+    payload += "\"a_lots_total\":"      + DoubleToString(A手數總數, 2)     + ",";
+    payload += "\"b_lots_total\":"      + DoubleToString(B手數總數, 2)     + ",";
+    payload += "\"lots_diff\":"         + DoubleToString(lots_diff, 2)     + ",";
+    payload += "\"a_profit_total\":"    + DoubleToString(a_profit_usd, 2)  + ",";
+    payload += "\"b_profit_total\":"    + DoubleToString(B盈利總數, 2)     + ",";
+    payload += "\"ab_profit_total\":"   + DoubleToString(ab_total, 2)      + ",";
+    payload += "\"a_interest_total\":"  + DoubleToString(A總息, 2)         + ",";
+    payload += "\"cost_per_lot\":"      + DoubleToString(cost_per_lot, 2)  + ",";
+    payload += "\"commission_per_lot\":" + DoubleToString(Commission_Per_Lot, 2) + ",";
+    payload += "\"open_lots\":"         + DoubleToString(0.0, 2);
+    payload += "}";
+    
+    if(EnableDebugLog) {
+        Print("=== 發送 A/B 統計 ===");
+        Print("  A手數:", A手數總數, " B手數:", B手數總數);
+        Print("  AB總盈利:", ab_total, " 每手成本:", cost_per_lot);
+    }
+    
+    bool success = SendHttpRequest(url, payload, 3);
+    
+    if(success) {
+        g_lastStatsReport = TimeCurrent();
+        g_statsReportedToday = true;
+        Print("✓ A/B統計發送成功");
+    }
+    
+    return success;
+}
+
+/**
+ * 檢查是否該發送心跳
+ */
+void CheckHeartbeat() {
+    datetime now = TimeCurrent();
+    int intervalSeconds = HeartbeatIntervalMinutes * 60;
+    
+    if(now - g_lastHeartbeat >= intervalSeconds) {
+        SendHeartbeat();
+    }
+}
+
+/**
+ * 檢查是否該發送統計
+ */
+ //1
+void CheckDailyStats() {
+    datetime now = TimeCurrent();
+    int currentHour = TimeHour(now);
+    int currentMinute = TimeMinute(now);
+    int currentDay = TimeDay(now);
+    
+    // 檢查是否到達自動上報時間
+    if(currentHour == StatsReportHour && currentMinute == StatsReportMinute) {
+        if(!g_statsReportedToday) {
+            // 觸發「A要求開始」邏輯
+            if(EnableDebugLog) {
+                Print("⏰ 到達自動上報時間 ", StatsReportHour, ":", StatsReportMinute);
+                Print("   自動觸發「A要求開始」流程");
+            }
+            
+            Step4時間已進入3 = 0;
+            Step4時間已進入2 = 0;
+            Step4時間已進入1 = 1;  // 觸發 A要求開始
+            
+            g_statsReportedToday = true;  // 標記今天已觸發
+        }
+    }
+    
+    // 新的一天重置標記
+    static int lastDay = 0;
+    if(lastDay == 0) lastDay = currentDay;
+    
+    if(currentDay != lastDay) {
+        g_statsReportedToday = false;
+        lastDay = currentDay;
+        if(EnableDebugLog) {
+            Print("🌅 新的一天開始，重置自動上報標記");
+        }
+    }
+}
+
+// ========== 原有函式 ==========
+
+void GMT1_日月() {
+    object_update_buttons(&m_button11,0xffffff,0x0099ff,"Calibri");
+    object_update_buttons(&m_button12,0xffffff,0x999999,"Calibri");
+    object_update_buttons(&m_button13,0xffffff,0x999999,"Calibri");
+    object_update_buttons(&m_button14,0xffffff,0x999999,"Calibri");
+    開始_日 = TimeDay(TimeCurrent());
+    object_update_edit(&m_edit3,string(開始_日),"Calibri");
+    結束_日 = TimeDay(TimeCurrent());
+    object_update_edit(&m_edit8,string(結束_日),"Calibri");
+    開始_月 = TimeMonth(TimeCurrent());
+    object_update_edit(&m_edit2,string(開始_月),"Calibri");
+    結束_月 = TimeMonth(TimeCurrent());
+    object_update_edit(&m_edit7,string(結束_月),"Calibri");
+    開始_年 = TimeYear(TimeCurrent());
+    object_update_edit(&m_edit1,string(開始_年),"Calibri");
+    結束_年 = TimeYear(TimeCurrent());
+    object_update_edit(&m_edit6,string(結束_年),"Calibri");
+}
+
+void GMT2_日月() {
+    開始_日 = TimeDay((TimeCurrent() - 86400));
+    object_update_edit(&m_edit3,string(開始_日),"Calibri");
+    結束_日 = TimeDay(TimeCurrent());
+    object_update_edit(&m_edit8,string(結束_日),"Calibri");
+    開始_月 = TimeMonth((TimeCurrent() - 86400));
+    object_update_edit(&m_edit2,string(開始_月),"Calibri");
+    結束_月 = TimeMonth(TimeCurrent());
+    object_update_edit(&m_edit7,string(結束_月),"Calibri");
+    object_update_buttons(&m_button12,0xffffff,0x0099ff,"Calibri");
+    object_update_buttons(&m_button11,0xffffff,0x999999,"Calibri");
+    object_update_buttons(&m_button13,0xffffff,0x999999,"Calibri");
+    object_update_buttons(&m_button14,0xffffff,0x999999,"Calibri");
+    開始_年 = TimeYear(TimeCurrent());
+    object_update_edit(&m_edit1,string(開始_年),"Calibri");
+    結束_年 = TimeYear(TimeCurrent());
+    object_update_edit(&m_edit6,string(結束_年),"Calibri");

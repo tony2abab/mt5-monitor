@@ -34,6 +34,9 @@ function App() {
   const [clientGroups, setClientGroups] = useState([])
   const [selectedGroup, setSelectedGroup] = useState('all')  // 當前選擇的分組
   const [showUngrouped, setShowUngrouped] = useState(true)  // 是否顯示無分組節點
+  const [pollInterval, setPollInterval] = useState(90)  // 輪詢間隔（分鐘），預設90分鐘
+  const [autoPollEnabled, setAutoPollEnabled] = useState(false)  // 是否啟用自動輪詢
+  const [lastPollTime, setLastPollTime] = useState(null)  // 上次輪詢時間
   
   // 檢查登入狀態
   useEffect(() => {
@@ -229,6 +232,40 @@ function App() {
     fetchNodes()
   }, [selectedDate, selectedGroup])
 
+  // 觸發 MT4 上報統計數據的函數
+  const triggerReportRequest = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/request-report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      })
+      const data = await response.json()
+      if (data.ok) {
+        alert('✓ 已發送上報請求給所有MT5')
+        setLastPollTime(new Date())
+        console.log('Report request triggered at', new Date().toLocaleTimeString())
+      } else {
+        alert('✗ 發送失敗：' + data.error)
+      }
+    } catch (err) {
+      console.error('Trigger report request error:', err)
+      alert('✗ 網絡錯誤：' + err.message)
+    }
+  }, [])
+
+  // 自動輪詢 - 每隔 pollInterval 分鐘觸發一次上報請求
+  useEffect(() => {
+    if (!autoPollEnabled || pollInterval <= 0) return
+    
+    const intervalMs = pollInterval * 60 * 1000
+    const pollTimer = setInterval(() => {
+      triggerReportRequest()
+    }, intervalMs)
+    
+    return () => clearInterval(pollTimer)
+  }, [autoPollEnabled, pollInterval, triggerReportRequest])
+
   // Filter and sort nodes
   const processedNodes = nodes
     .filter(node => {
@@ -372,55 +409,11 @@ function App() {
         />
 
         <main className="container mx-auto px-4 py-8">
-          {/* Client Group Selector + Snapshot Time Info - 同一行 */}
-          <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
-            {/* Client Group Selector */}
-            {allowedGroups.length > 0 && (
-              <div className="flex gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-purple/30">
-                <button
-                  onClick={() => setSelectedGroup('all')}
-                  className={`px-4 py-2 rounded transition-all ${
-                    selectedGroup === 'all'
-                      ? 'bg-cyber-purple/20 text-cyber-purple font-semibold'
-                      : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  全部
-                </button>
-                {allowedGroups.map(group => (
-                  <button
-                    key={group}
-                    onClick={() => setSelectedGroup(group)}
-                    className={`px-4 py-2 rounded transition-all ${
-                      selectedGroup === group
-                        ? 'bg-cyber-purple/20 text-cyber-purple font-semibold'
-                        : 'text-gray-400 hover:text-gray-200'
-                    }`}
-                  >
-                    分組 {group}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Snapshot Time Info - 右對齊 */}
-            {currentPage === 'monitor' && snapshotInfo && (
-              <div className="text-sm text-white ml-auto">
-                <span>
-                  最後上報: {snapshotInfo.lastSnapshot 
-                    ? `${snapshotInfo.lastSnapshot.platform} (${snapshotInfo.lastSnapshot.hk})`
-                    : '尚無記錄'
-                  }
-                  {' | '}
-                  下次快照: {snapshotInfo.nextSnapshot.platform} ({snapshotInfo.nextSnapshot.hk})
-                </span>
-              </div>
-            )}
-          </div>
 
           {/* Monitor Page Controls - Combined Navigation and View Controls */}
           {currentPage === 'monitor' && (
-            <div className="mb-6 flex flex-wrap gap-3 items-center">
+            <div className="mb-6 flex flex-wrap gap-3 items-center justify-between">
+              <div className="flex flex-wrap gap-3 items-center">
               {/* Page Navigation */}
               <div className="flex gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-blue/20">
                 <button
@@ -444,6 +437,35 @@ function App() {
                   歷史數據
                 </button>
               </div>
+
+              {/* Client Group Selector */}
+              {allowedGroups.length > 0 && (
+                <div className="flex gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-purple/30">
+                  <button
+                    onClick={() => setSelectedGroup('all')}
+                    className={`px-4 py-2 rounded transition-all ${
+                      selectedGroup === 'all'
+                        ? 'bg-cyber-purple/20 text-cyber-purple font-semibold'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    全部
+                  </button>
+                  {allowedGroups.map(group => (
+                    <button
+                      key={group}
+                      onClick={() => setSelectedGroup(group)}
+                      className={`px-4 py-2 rounded transition-all ${
+                        selectedGroup === group
+                          ? 'bg-cyber-purple/20 text-cyber-purple font-semibold'
+                          : 'text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      分組 {group}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* View mode toggle */}
               <div className="flex gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-blue/20">
@@ -522,8 +544,18 @@ function App() {
               {/* Clear stats button */}
               <button
               onClick={async () => {
+                const groupToClean = selectedGroup === 'all' ? null : selectedGroup
+                const confirmMsg = groupToClean 
+                  ? `確定要清除分組 ${groupToClean} 的今日統計數據嗎？` 
+                  : '確定要清除所有分組的今日統計數據嗎？'
+                if (!window.confirm(confirmMsg)) return
+                
                 try {
-                  const res = await fetch(`${API_BASE}/nodes/clear-stats`, { method: 'POST' })
+                  const res = await fetch(`${API_BASE}/nodes/clear-stats`, { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ group: groupToClean })
+                  })
                   if (!res.ok) throw new Error('Failed to clear stats')
                   await fetchNodes()
                 } catch (err) {
@@ -532,8 +564,9 @@ function App() {
                 }
               }}
               className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/60 text-red-400 rounded-lg text-sm transition-all"
+              title={selectedGroup === 'all' ? '清除所有分組的今日統計' : `清除分組 ${selectedGroup} 的今日統計`}
             >
-              清除所有統計數據
+              清除今日統計
             </button>
 
             {/* Date selector - Today/Yesterday */}
@@ -559,38 +592,139 @@ function App() {
                 昨天
               </button>
             </div>
+              </div>
+
+              {/* 輪詢間隔設定 - 右側 */}
+              <div className="flex items-center gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-blue/20">
+                <button
+                  onClick={() => setAutoPollEnabled(!autoPollEnabled)}
+                  className={`px-3 py-2 rounded transition-all text-sm ${
+                    autoPollEnabled
+                      ? 'bg-cyber-green/20 text-cyber-green'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                  title={autoPollEnabled ? '點擊停止自動輪詢' : '點擊啟動自動輪詢'}
+                >
+                  {autoPollEnabled ? '⏸️ 輪詢中' : '▶️ 自動輪詢'}
+                </button>
+                <select
+                  value={pollInterval}
+                  onChange={(e) => setPollInterval(Number(e.target.value))}
+                  className="px-2 py-2 bg-cyber-darker border-0 text-gray-200 text-sm focus:outline-none"
+                  title="輪詢間隔"
+                >
+                  <option value="60">60分鐘</option>
+                  <option value="90">90分鐘</option>
+                  <option value="120">2小時</option>
+                  <option value="180">3小時</option>
+                </select>
+                <button
+                  onClick={triggerReportRequest}
+                  className="px-3 py-2 rounded bg-cyber-blue/20 text-cyber-blue hover:bg-cyber-blue/30 transition-all text-sm"
+                  title="要求所有 MT4 在 1 分鐘內上報統計數據"
+                >
+                  📊 要求1分鐘內MT5上報數據
+                </button>
+              </div>
             </div>
           )}
 
           {/* History Page Navigation */}
           {currentPage === 'history' && (
-            <div className="mb-6 flex gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-blue/20 w-fit">
-              <button
-                onClick={() => setCurrentPage('monitor')}
-                className={`px-6 py-2 rounded transition-all ${
-                  currentPage === 'monitor' 
-                    ? 'bg-cyber-blue/20 text-cyber-blue font-semibold' 
-                    : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                即時監控
-              </button>
-              <button
-                onClick={() => setCurrentPage('history')}
-                className={`px-6 py-2 rounded transition-all ${
-                  currentPage === 'history' 
-                    ? 'bg-cyber-blue/20 text-cyber-blue font-semibold' 
-                    : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                歷史數據
-              </button>
+            <div className="mb-6 flex flex-wrap gap-3 items-center justify-between">
+              <div className="flex flex-wrap gap-3 items-center">
+                {/* Page Navigation */}
+                <div className="flex gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-blue/20">
+                  <button
+                    onClick={() => setCurrentPage('monitor')}
+                    className={`px-6 py-2 rounded transition-all ${
+                      currentPage === 'monitor' 
+                        ? 'bg-cyber-blue/20 text-cyber-blue font-semibold' 
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    即時監控
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage('history')}
+                    className={`px-6 py-2 rounded transition-all ${
+                      currentPage === 'history' 
+                        ? 'bg-cyber-blue/20 text-cyber-blue font-semibold' 
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    歷史數據
+                  </button>
+                </div>
+
+                {/* Client Group Selector */}
+                {allowedGroups.length > 0 && (
+                  <div className="flex gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-purple/30">
+                    <button
+                      onClick={() => setSelectedGroup('all')}
+                      className={`px-4 py-2 rounded transition-all ${
+                        selectedGroup === 'all'
+                          ? 'bg-cyber-purple/20 text-cyber-purple font-semibold'
+                          : 'text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      全部
+                    </button>
+                    {allowedGroups.map(group => (
+                      <button
+                        key={group}
+                        onClick={() => setSelectedGroup(group)}
+                        className={`px-4 py-2 rounded transition-all ${
+                          selectedGroup === group
+                            ? 'bg-cyber-purple/20 text-cyber-purple font-semibold'
+                            : 'text-gray-400 hover:text-gray-200'
+                        }`}
+                      >
+                        分組 {group}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 輪詢間隔設定 - 右側 */}
+              <div className="flex items-center gap-2 bg-cyber-darker p-1 rounded-lg border border-cyber-blue/20">
+                <button
+                  onClick={() => setAutoPollEnabled(!autoPollEnabled)}
+                  className={`px-3 py-2 rounded transition-all text-sm ${
+                    autoPollEnabled
+                      ? 'bg-cyber-green/20 text-cyber-green'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                  title={autoPollEnabled ? '點擊停止自動輪詢' : '點擊啟動自動輪詢'}
+                >
+                  {autoPollEnabled ? '⏸️ 輪詢中' : '▶️ 自動輪詢'}
+                </button>
+                <select
+                  value={pollInterval}
+                  onChange={(e) => setPollInterval(Number(e.target.value))}
+                  className="px-2 py-2 bg-cyber-darker border-0 text-gray-200 text-sm focus:outline-none"
+                  title="輪詢間隔"
+                >
+                  <option value="60">60分鐘</option>
+                  <option value="90">90分鐘</option>
+                  <option value="120">2小時</option>
+                  <option value="180">3小時</option>
+                </select>
+                <button
+                  onClick={triggerReportRequest}
+                  className="px-3 py-2 rounded bg-cyber-blue/20 text-cyber-blue hover:bg-cyber-blue/30 transition-all text-sm"
+                  title="要求所有 MT4 在 1 分鐘內上報統計數據"
+                >
+                  📊 要求1分鐘內MT5上報數據
+                </button>
+              </div>
             </div>
           )}
 
           {/* History Page Content */}
           {currentPage === 'history' && (
-            <HistoryView allowedGroups={allowedGroups} selectedGroup={selectedGroup} />
+            <HistoryView allowedGroups={allowedGroups} selectedGroup={selectedGroup} username={username} />
           )}
 
           {/* Monitor Page Content */}

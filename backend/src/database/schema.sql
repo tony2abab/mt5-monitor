@@ -10,9 +10,19 @@ CREATE TABLE IF NOT EXISTS nodes (
     last_heartbeat DATETIME,
     status TEXT CHECK(status IN ('online', 'offline')) DEFAULT 'offline',
     meta TEXT, -- JSON string for additional metadata like symbols
+    -- Monitor_OnlyHeartbeat 模式的場上數據
+    open_buy_lots REAL DEFAULT 0,    -- 場上買單手數
+    open_sell_lots REAL DEFAULT 0,   -- 場上賣單手數
+    floating_pl REAL DEFAULT 0,      -- 浮動盈虧
+    balance REAL DEFAULT 0,          -- 餘額
+    equity REAL DEFAULT 0,           -- 淨值
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Migration: Add open position columns if they don't exist
+-- SQLite doesn't support IF NOT EXISTS for ALTER TABLE, so we use a workaround
+-- These will be added by the migration code in db.js
 
 -- Users table: stores web login users
 CREATE TABLE IF NOT EXISTS users (
