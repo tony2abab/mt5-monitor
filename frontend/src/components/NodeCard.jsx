@@ -3,9 +3,6 @@ function NodeCard({ node, onHide }) {
           open_buy_lots, open_sell_lots, floating_pl, balance, equity } = node
   const isOnline = status === 'online'
   
-  // 優先使用 A/B 統計數據，沒有則使用舊格式（向後兼容）
-  const stats = todayABStats || todayStats
-  
   // 檢查是否有場上數據（Monitor_OnlyHeartbeat 模式）
   const hasOpenData = (
     (open_buy_lots != null && open_buy_lots > 0) || 
@@ -14,6 +11,14 @@ function NodeCard({ node, onHide }) {
     (balance != null && balance > 0) || 
     (equity != null && equity > 0)
   )
+  
+  // 檢查 todayABStats 是否有實際數據（不只是 reported_at）
+  // 如果只有 reported_at 而沒有 a_lots_total，說明是 OnlyHeartbeat 模式
+  const hasRealABStats = todayABStats && todayABStats.a_lots_total != null
+  
+  // 優先使用有實際數據的 A/B 統計，沒有則使用舊格式（向後兼容）
+  // 如果是 OnlyHeartbeat 模式（有場上數據但沒有實際 AB 統計），則不使用 stats
+  const stats = hasRealABStats ? todayABStats : (hasOpenData ? null : todayStats)
 
   return (
     <div
@@ -64,7 +69,7 @@ function NodeCard({ node, onHide }) {
 
       {/* A/B System Stats */}
       {stats ? (
-        todayABStats ? (
+        hasRealABStats ? (
           // 顯示 A/B 系統統計（新格式）
           <div className="space-y-1">
             <div className="flex items-center gap-2">
