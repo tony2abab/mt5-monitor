@@ -187,6 +187,14 @@ router.post('/heartbeat', authMiddleware, (req, res) => {
         // When heartbeat is received, ensure node is no longer muted
         heartbeatService.unmuteNode(id);
         
+        // 如果有場上數據（Monitor_OnlyHeartbeat 模式），也更新 ab_stats 表的 reported_at
+        // 這樣 Web 前端的「最後統計」就能顯示正確的時間
+        if (open_buy_lots !== undefined || open_sell_lots !== undefined || 
+            floating_pl !== undefined || balance !== undefined || equity !== undefined) {
+            const today = new Date().toISOString().split('T')[0];
+            db.upsertABStatsReportedAt(id, today);
+        }
+        
         // Check for status transition
         if (oldStatus === 'offline' || oldStatus === null) {
             // Node came online

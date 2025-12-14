@@ -273,6 +273,17 @@ class DatabaseManager {
         );
     }
     
+    // 只更新 ab_stats 的 reported_at（用於 Monitor_OnlyHeartbeat 模式）
+    upsertABStatsReportedAt(nodeId, date) {
+        const stmt = this.db.prepare(`
+            INSERT INTO ab_stats (node_id, date, reported_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(node_id, date) DO UPDATE SET
+                reported_at = datetime('now')
+        `);
+        return stmt.run(nodeId, date);
+    }
+    
     getLatestABStats(nodeId, days = 7) {
         const stmt = this.db.prepare(`
             SELECT * FROM ab_stats 
