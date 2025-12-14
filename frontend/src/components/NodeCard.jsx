@@ -4,21 +4,26 @@ function NodeCard({ node, onHide }) {
   const isOnline = status === 'online'
   
   // 檢查是否有場上數據（Monitor_OnlyHeartbeat 模式）
+  // balance 和 equity 只要有值就算有場上數據
   const hasOpenData = (
-    (open_buy_lots != null && open_buy_lots > 0) || 
-    (open_sell_lots != null && open_sell_lots > 0) || 
-    (floating_pl != null && floating_pl !== 0) ||
+    (open_buy_lots != null) || 
+    (open_sell_lots != null) || 
+    (floating_pl != null) ||
     (balance != null && balance > 0) || 
     (equity != null && equity > 0)
   )
   
-  // 檢查 todayABStats 是否有實際數據（不只是 reported_at）
-  // 如果只有 reported_at 而沒有 a_lots_total，說明是 OnlyHeartbeat 模式
-  const hasRealABStats = todayABStats && todayABStats.a_lots_total != null
+  // 檢查 todayABStats 是否有實際的交易數據（a_lots_total 或 b_lots_total > 0）
+  // 如果沒有實際交易數據但有場上數據，說明是 OnlyHeartbeat 模式
+  const hasRealABStats = todayABStats && (
+    (todayABStats.a_lots_total > 0) || 
+    (todayABStats.b_lots_total > 0) ||
+    (todayABStats.ab_profit_total !== 0 && todayABStats.ab_profit_total != null)
+  )
   
-  // 優先使用有實際數據的 A/B 統計，沒有則使用舊格式（向後兼容）
-  // 如果是 OnlyHeartbeat 模式（有場上數據但沒有實際 AB 統計），則不使用 stats
-  const stats = hasRealABStats ? todayABStats : (hasOpenData ? null : todayStats)
+  // 優先顯示場上數據（如果有），否則顯示詳細統計
+  // 這樣當從詳細模式切換到 OnlyHeartbeat 模式時，會正確顯示場上數據
+  const stats = hasOpenData ? null : (hasRealABStats ? todayABStats : todayStats)
 
   return (
     <div
