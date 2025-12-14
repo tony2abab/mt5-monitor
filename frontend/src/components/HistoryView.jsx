@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calendar, TrendingUp, DollarSign, Activity, User } from 'lucide-react';
+import { Calendar, TrendingUp, DollarSign, Activity, User, FileSpreadsheet } from 'lucide-react';
 
 function HistoryView({ allowedGroups = [], selectedGroup = '', username = '' }) {
   const [snapshots, setSnapshots] = useState([]);
@@ -30,8 +30,14 @@ function HistoryView({ allowedGroups = [], selectedGroup = '', username = '' }) 
   const [showDailyDetail, setShowDailyDetail] = useState(false);
   const [loadingDailyDetail, setLoadingDailyDetail] = useState(false);
   
-  // 功能區塊顯示控制：'range' | 'node' | 'daily' | null
+  // 功能區塊顯示控制：'range' | 'node' | 'daily' | 'excel' | null
   const [activePanel, setActivePanel] = useState(null);
+  
+  // Excel 導出
+  const [excelStartDate, setExcelStartDate] = useState('');
+  const [excelEndDate, setExcelEndDate] = useState('');
+  const [excelSelectedNodes, setExcelSelectedNodes] = useState([]);
+  const [excelLoading, setExcelLoading] = useState(false);
 
   useEffect(() => {
     fetchHistory();
@@ -132,6 +138,76 @@ function HistoryView({ allowedGroups = [], selectedGroup = '', username = '' }) 
     setDailyDetailDate('');
     setDailyNodeStats([]);
     setShowDailyDetail(false);
+  };
+  
+  // 生成 Excel 導出
+  const generateExcel = async () => {
+    if (!excelStartDate || !excelEndDate) {
+      alert('請選擇開始和結束日期');
+      return;
+    }
+    
+    try {
+      setExcelLoading(true);
+      
+      const response = await fetch('/api/export/history-excel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          startDate: excelStartDate,
+          endDate: excelEndDate,
+          nodeIds: excelSelectedNodes.length > 0 ? excelSelectedNodes : null
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '導出失敗');
+      }
+      
+      // 下載文件
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `歷史數據_${excelStartDate}_${excelEndDate}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+    } catch (err) {
+      alert('導出失敗：' + err.message);
+    } finally {
+      setExcelLoading(false);
+    }
+  };
+  
+  // 重置 Excel 導出
+  const resetExcelExport = () => {
+    setExcelStartDate('');
+    setExcelEndDate('');
+    setExcelSelectedNodes([]);
+  };
+  
+  // 切換節點選擇
+  const toggleNodeSelection = (nodeId) => {
+    setExcelSelectedNodes(prev => 
+      prev.includes(nodeId) 
+        ? prev.filter(id => id !== nodeId)
+        : [...prev, nodeId]
+    );
+  };
+  
+  // 全選/取消全選節點
+  const toggleAllNodes = () => {
+    if (excelSelectedNodes.length === nodeList.length) {
+      setExcelSelectedNodes([]);
+    } else {
+      setExcelSelectedNodes(nodeList.map(n => n.id));
+    }
   };
 
   const fetchHistory = async () => {
@@ -291,6 +367,17 @@ function HistoryView({ allowedGroups = [], selectedGroup = '', username = '' }) 
             }`}
           >
             單日節點詳情
+          </button>
+          <button
+            onClick={() => setActivePanel(activePanel === 'excel' ? null : 'excel')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+              activePanel === 'excel' 
+                ? 'bg-green-600 text-white' 
+                : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+            }`}
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            生成歷史Excel
           </button>
         </div>
       </div>
@@ -872,6 +959,118 @@ function HistoryView({ allowedGroups = [], selectedGroup = '', username = '' }) 
             </div>
           </div>
         )}
+      </div>
+      )}
+
+      {/* Excel 導出面板 */}
+      {activePanel === 'excel' && (
+      <div className="bg-cyber-darker/60 rounded-xl p-6 cyber-border">
+        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <FileSpreadsheet className="w-5 h-5 text-green-400" />
+          生成歷史 Excel
+        </h3>
+        <div className="space-y-4">
+          {/* 日期範圍選擇 */}
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="flex-1 min-w-[150px]">
+              <label className="block text-sm text-gray-400 mb-2">開始日期</label>
+              <input
+                type="date"
+                value={excelStartDate}
+                onChange={(e) => setExcelStartDate(e.target.value)}
+                className="w-full px-4 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:border-green-500 focus:outline-none [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:brightness-100"
+              />
+            </div>
+            <div className="flex-1 min-w-[150px]">
+              <label className="block text-sm text-gray-400 mb-2">結束日期</label>
+              <input
+                type="date"
+                value={excelEndDate}
+                onChange={(e) => setExcelEndDate(e.target.value)}
+                className="w-full px-4 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:border-green-500 focus:outline-none [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:brightness-100"
+              />
+            </div>
+          </div>
+          
+          {/* 節點選擇 */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm text-gray-400">選擇節點（不選則導出全部）</label>
+              <button
+                onClick={toggleAllNodes}
+                className="text-xs text-green-400 hover:text-green-300"
+              >
+                {excelSelectedNodes.length === nodeList.length ? '取消全選' : '全選'}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-48 overflow-y-auto p-2 bg-gray-800/30 rounded-lg">
+              {nodeList.map(node => (
+                <label
+                  key={node.id}
+                  className={`flex items-center gap-2 px-3 py-2 rounded cursor-pointer transition-colors ${
+                    excelSelectedNodes.includes(node.id)
+                      ? 'bg-green-600/30 border border-green-500/50'
+                      : 'bg-gray-700/50 hover:bg-gray-700 border border-transparent'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={excelSelectedNodes.includes(node.id)}
+                    onChange={() => toggleNodeSelection(node.id)}
+                    className="w-4 h-4 rounded border-gray-500 text-green-500 focus:ring-green-500"
+                  />
+                  <span className="text-xs text-white truncate">{node.id}</span>
+                </label>
+              ))}
+            </div>
+            {excelSelectedNodes.length > 0 && (
+              <div className="mt-2 text-xs text-gray-400">
+                已選擇 {excelSelectedNodes.length} 個節點
+              </div>
+            )}
+          </div>
+          
+          {/* 操作按鈕 */}
+          <div className="flex gap-4 pt-2">
+            <button
+              onClick={generateExcel}
+              disabled={excelLoading || !excelStartDate || !excelEndDate}
+              className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                excelLoading || !excelStartDate || !excelEndDate
+                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  : 'bg-green-600 hover:bg-green-500 text-white'
+              }`}
+            >
+              {excelLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  生成中...
+                </>
+              ) : (
+                <>
+                  <FileSpreadsheet className="w-4 h-4" />
+                  生成 Excel
+                </>
+              )}
+            </button>
+            <button
+              onClick={resetExcelExport}
+              className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+            >
+              重置
+            </button>
+          </div>
+          
+          {/* 說明 */}
+          <div className="text-xs text-gray-500 mt-2">
+            <p>Excel 文件包含以下分頁：</p>
+            <ul className="list-disc list-inside mt-1 space-y-0.5">
+              <li>每日節點數據 - 每個節點每日的詳細數據</li>
+              <li>每日加總 - 每日所有節點的加總數據</li>
+              <li>每月加總 - 每月各節點及全部節點的加總數據</li>
+            </ul>
+          </div>
+        </div>
       </div>
       )}
 

@@ -9,6 +9,7 @@ const rateLimit = require('express-rate-limit');
 const authMiddleware = require('./middleware/auth');
 const auditMiddleware = require('./middleware/audit');
 const apiRoutes = require('./routes/api');
+const exportRoutes = require('./routes/export');
 const heartbeatService = require('./services/heartbeat');
 const snapshotService = require('./services/snapshot');
 const schedulerService = require('./services/scheduler');
@@ -52,6 +53,7 @@ app.get('/health', (req, res) => {
 // API routes
 // Mount all routes at /api, authentication is applied per-route in the router
 app.use('/api', apiRoutes);
+app.use('/api/export', exportRoutes);
 
 // Serve static files from frontend dist folder
 const frontendPath = path.join(__dirname, '../../frontend/dist');

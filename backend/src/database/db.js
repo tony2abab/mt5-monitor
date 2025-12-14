@@ -347,6 +347,37 @@ class DatabaseManager {
     }
     
     /**
+     * 獲取日期範圍內所有節點的 AB 統計數據（用於 Excel 導出）
+     * @param {string} startDate - 開始日期 YYYY-MM-DD
+     * @param {string} endDate - 結束日期 YYYY-MM-DD
+     * @param {string[]} nodeIds - 節點 ID 列表（可選，為空則返回所有節點）
+     */
+    getAllABStatsByDateRange(startDate, endDate, nodeIds = null) {
+        if (nodeIds && nodeIds.length > 0) {
+            const placeholders = nodeIds.map(() => '?').join(',');
+            const stmt = this.db.prepare(`
+                SELECT ab.*, n.name as node_name, n.client_group
+                FROM ab_stats ab
+                LEFT JOIN nodes n ON ab.node_id = n.id
+                WHERE ab.date >= ? AND ab.date <= ? AND ab.node_id IN (${placeholders})
+                AND ab.a_lots_total IS NOT NULL
+                ORDER BY ab.date ASC, ab.node_id ASC
+            `);
+            return stmt.all(startDate, endDate, ...nodeIds);
+        } else {
+            const stmt = this.db.prepare(`
+                SELECT ab.*, n.name as node_name, n.client_group
+                FROM ab_stats ab
+                LEFT JOIN nodes n ON ab.node_id = n.id
+                WHERE ab.date >= ? AND ab.date <= ?
+                AND ab.a_lots_total IS NOT NULL
+                ORDER BY ab.date ASC, ab.node_id ASC
+            `);
+            return stmt.all(startDate, endDate);
+        }
+    }
+    
+    /**
      * ?²å??¶å?äº¤æ??¥æ?
      * CFDå¹³å�°?‚é? 00:00-01:30 ä¹‹é?ç®—å?ä¸€å¤©ï?01:30 ä¹‹å?ç®—ç•¶å¤?
      */
