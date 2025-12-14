@@ -12,12 +12,13 @@ const router = express.Router();
  * {
  *   startDate: "YYYY-MM-DD",  // 開始日期
  *   endDate: "YYYY-MM-DD",    // 結束日期
- *   nodeIds: ["VPS1", "VPS2"] // 節點 ID 列表（可選，為空則導出所有節點）
+ *   nodeIds: ["VPS1", "VPS2"], // 節點 ID 列表（可選，為空則導出所有節點）
+ *   allowedGroups: ["A", "B"]  // 用戶允許的分組（前端傳入，用於權限過濾）
  * }
  */
 router.post('/history-excel', async (req, res) => {
     try {
-        const { startDate, endDate, nodeIds } = req.body;
+        const { startDate, endDate, nodeIds, allowedGroups } = req.body;
         
         // 驗證日期
         if (!startDate || !endDate) {
@@ -28,7 +29,14 @@ router.post('/history-excel', async (req, res) => {
         }
         
         // 獲取數據
-        const allStats = db.getAllABStatsByDateRange(startDate, endDate, nodeIds);
+        let allStats = db.getAllABStatsByDateRange(startDate, endDate, nodeIds);
+        
+        // 如果有分組限制，過濾數據（確保用戶只能導出其有權限的分組）
+        if (allowedGroups && allowedGroups.length > 0) {
+            allStats = allStats.filter(stat => 
+                stat.client_group && allowedGroups.includes(stat.client_group)
+            );
+        }
         
         if (allStats.length === 0) {
             return res.status(404).json({

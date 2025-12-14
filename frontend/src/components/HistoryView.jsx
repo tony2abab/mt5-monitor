@@ -158,7 +158,8 @@ function HistoryView({ allowedGroups = [], selectedGroup = '', username = '' }) 
         body: JSON.stringify({
           startDate: excelStartDate,
           endDate: excelEndDate,
-          nodeIds: excelSelectedNodes.length > 0 ? excelSelectedNodes : null
+          nodeIds: excelSelectedNodes.length > 0 ? excelSelectedNodes : null,
+          allowedGroups: allowedGroups.length > 0 ? allowedGroups : null
         })
       });
       
