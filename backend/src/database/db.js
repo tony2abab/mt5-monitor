@@ -45,6 +45,7 @@ class DatabaseManager {
     // 資料庫遷移：添加場上數據欄位到 nodes 表
     migrateNodesTable() {
         const columns = [
+            { name: 'nav', type: 'REAL DEFAULT 0' },
             { name: 'open_buy_lots', type: 'REAL DEFAULT 0' },
             { name: 'open_sell_lots', type: 'REAL DEFAULT 0' },
             { name: 'floating_pl', type: 'REAL DEFAULT 0' },
@@ -75,6 +76,8 @@ class DatabaseManager {
     upsertNode(nodeData) {
         const { 
             id, name, broker, account, meta, client_group,
+            // 帳戶淨值 NAV (始終發送)
+            nav,
             // Monitor_OnlyHeartbeat 模式的場上數據
             open_buy_lots, open_sell_lots, floating_pl, balance, equity
         } = nodeData;
@@ -90,8 +93,8 @@ class DatabaseManager {
             // 包含場上數據的更新
             const stmt = this.db.prepare(`
                 INSERT INTO nodes (id, name, broker, account, client_group, meta, last_heartbeat, status, updated_at,
-                                   open_buy_lots, open_sell_lots, floating_pl, balance, equity)
-                VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 'online', datetime('now'), ?, ?, ?, ?, ?)
+                                   nav, open_buy_lots, open_sell_lots, floating_pl, balance, equity)
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 'online', datetime('now'), ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = COALESCE(excluded.name, name, excluded.id),
                     broker = excluded.broker,
@@ -101,6 +104,7 @@ class DatabaseManager {
                     last_heartbeat = excluded.last_heartbeat,
                     status = 'online',
                     updated_at = datetime('now'),
+                    nav = excluded.nav,
                     open_buy_lots = excluded.open_buy_lots,
                     open_sell_lots = excluded.open_sell_lots,
                     floating_pl = excluded.floating_pl,
@@ -109,12 +113,12 @@ class DatabaseManager {
             `);
             
             return stmt.run(id, nodeName, broker, account, client_group || 'A', metaJson,
-                           open_buy_lots || 0, open_sell_lots || 0, floating_pl || 0, balance || 0, equity || 0);
+                           nav || 0, open_buy_lots || 0, open_sell_lots || 0, floating_pl || 0, balance || 0, equity || 0);
         } else {
-            // 普通心跳（不更新場上數據）
+            // 普通心跳（包含 NAV 但不更新其他場上數據）
             const stmt = this.db.prepare(`
-                INSERT INTO nodes (id, name, broker, account, client_group, meta, last_heartbeat, status, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 'online', datetime('now'))
+                INSERT INTO nodes (id, name, broker, account, client_group, meta, last_heartbeat, status, updated_at, nav)
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 'online', datetime('now'), ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = COALESCE(excluded.name, name, excluded.id),
                     broker = excluded.broker,
@@ -123,10 +127,11 @@ class DatabaseManager {
                     meta = excluded.meta,
                     last_heartbeat = excluded.last_heartbeat,
                     status = 'online',
-                    updated_at = datetime('now')
+                    updated_at = datetime('now'),
+                    nav = excluded.nav
             `);
             
-            return stmt.run(id, nodeName, broker, account, client_group || 'A', metaJson);
+            return stmt.run(id, nodeName, broker, account, client_group || 'A', metaJson, nav || 0);
         }
     }
     

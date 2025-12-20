@@ -3,70 +3,114 @@
 
 
 
-# ========== 創建 VPS 效能監測排程任務 ==========
+# ========== 重新创建 VPS 效能监测排程任务 ==========
+# 此脚本需要以管理员身份运行
 
-Write-Host "`n開始創建排程任務..." -ForegroundColor Cyan
+Write-Host "`n========================================" -ForegroundColor Cyan
+Write-Host "  VPS 效能监测排程任务 - 重新创建" -ForegroundColor Cyan
+Write-Host "========================================`n" -ForegroundColor Cyan
 
-# 1. 定義執行動作（執行 PowerShell 腳本）
+# 1. 删除旧任务
+Write-Host "步骤 1: 删除旧任务..." -ForegroundColor Yellow
+try {
+    Unregister-ScheduledTask -TaskName "VPS_Performance_Monitor" -Confirm:$false -ErrorAction SilentlyContinue
+    Write-Host "✓ 旧任务已删除" -ForegroundColor Green
+} catch {
+    Write-Host "  (旧任务不存在，跳过)" -ForegroundColor Gray
+}
+
+# 2. 定义执行动作
+Write-Host "`n步骤 2: 定义执行动作..." -ForegroundColor Yellow
 $action = New-ScheduledTaskAction `
     -Execute "PowerShell.exe" `
     -Argument "-NoProfile -ExecutionPolicy Bypass -File C:\VPS_Monitor\vps-monitor-agent.ps1"
+Write-Host "✓ 动作已定义" -ForegroundColor Green
 
-Write-Host "✓ 動作已定義" -ForegroundColor Green
+# 3. 定义触发器 1：开机后 1 分钟执行
+Write-Host "`n步骤 3: 定义触发器..." -ForegroundColor Yellow
+$trigger1 = New-ScheduledTaskTrigger -AtStartup
+$trigger1.Delay = 'PT1M'  # 延迟 1 分钟
+Write-Host "✓ 触发器 1: 开机后 1 分钟执行" -ForegroundColor Green
 
-# 2. 定義觸發器（每 5 分鐘執行一次）
-$trigger = New-ScheduledTaskTrigger `
+# 4. 定义触发器 2：每 5 分钟重复执行
+$trigger2 = New-ScheduledTaskTrigger `
     -Once `
-    -At (Get-Date) `
+    -At (Get-Date).AddMinutes(1) `
     -RepetitionInterval (New-TimeSpan -Minutes 5)
+Write-Host "✓ 触发器 2: 每 5 分钟重复执行" -ForegroundColor Green
 
-Write-Host "✓ 觸發器已定義（每 5 分鐘執行）" -ForegroundColor Green
-
-# 3. 定義執行身份（使用 SYSTEM 帳戶，最高權限）
+# 5. 定义执行身份（SYSTEM 账户）
+Write-Host "`n步骤 4: 定义执行身份..." -ForegroundColor Yellow
 $principal = New-ScheduledTaskPrincipal `
     -UserId "SYSTEM" `
     -LogonType ServiceAccount `
     -RunLevel Highest
+Write-Host "✓ 执行身份: SYSTEM (最高权限)" -ForegroundColor Green
 
-Write-Host "✓ 執行身份已定義（SYSTEM 帳戶）" -ForegroundColor Green
-
-# 4. 定義任務設定（允許在電池模式下執行，開機後自動啟動）
+# 6. 定义任务设定
+Write-Host "`n步骤 5: 定义任务设定..." -ForegroundColor Yellow
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
     -StartWhenAvailable `
-    -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
+    -ExecutionTimeLimit (New-TimeSpan -Minutes 2) `
+    -RestartCount 3 `
+    -RestartInterval (New-TimeSpan -Minutes 1)
+Write-Host "✓ 任务设定已定义" -ForegroundColor Green
+Write-Host "  - 允许电池模式运行" -ForegroundColor Gray
+Write-Host "  - 开机后自动启动" -ForegroundColor Gray
+Write-Host "  - 失败自动重试 3 次" -ForegroundColor Gray
 
-Write-Host "✓ 任務設定已定義" -ForegroundColor Green
-
-# 5. 註冊排程任務
+# 7. 注册排程任务
+Write-Host "`n步骤 6: 注册排程任务..." -ForegroundColor Yellow
 Register-ScheduledTask `
     -TaskName "VPS_Performance_Monitor" `
     -Action $action `
-    -Trigger $trigger `
+    -Trigger $trigger1,$trigger2 `
     -Principal $principal `
     -Settings $settings `
-    -Description "VPS 效能監測 - 每 5 分鐘自動執行，發送數據到主控 VPS" `
-    -Force
+    -Description "VPS 效能监测 - 开机后自动执行，每 5 分钟重复" `
+    -Force | Out-Null
+Write-Host "✓ 任务注册成功！" -ForegroundColor Green
 
-Write-Host "`n✓ 排程任務創建成功！" -ForegroundColor Green
-Write-Host "  任務名稱：VPS_Performance_Monitor" -ForegroundColor Yellow
-Write-Host "  執行頻率：每 5 分鐘" -ForegroundColor Yellow
-Write-Host "  執行帳戶：SYSTEM" -ForegroundColor Yellow
+# 8. 立即执行一次测试
+Write-Host "`n步骤 7: 立即执行任务测试..." -ForegroundColor Yellow
+Start-ScheduledTask -TaskName "VPS_Performance_Monitor"
+Write-Host "✓ 任务已启动" -ForegroundColor Green
+Write-Host "  等待 5 秒..." -ForegroundColor Gray
+Start-Sleep -Seconds 5
 
-# 6. 驗證任務
-Write-Host "`n正在驗證任務..." -ForegroundColor Cyan
-$task = Get-ScheduledTask -TaskName "VPS_Performance_Monitor" -ErrorAction SilentlyContinue
+# 9. 验证任务状态
+Write-Host "`n步骤 8: 验证任务状态..." -ForegroundColor Yellow
+$task = Get-ScheduledTask -TaskName "VPS_Performance_Monitor"
+$taskInfo = Get-ScheduledTaskInfo -TaskName "VPS_Performance_Monitor"
 
-if ($task) {
-    Write-Host "✓ 任務驗證成功！" -ForegroundColor Green
-    Write-Host "  狀態：$($task.State)" -ForegroundColor Gray
-    
-    # 顯示下次執行時間
-    $taskInfo = Get-ScheduledTaskInfo -TaskName "VPS_Performance_Monitor"
-    Write-Host "  下次執行：$($taskInfo.NextRunTime)" -ForegroundColor Gray
-} else {
-    Write-Host "✗ 任務驗證失敗" -ForegroundColor Red
+Write-Host "`n========================================" -ForegroundColor Cyan
+Write-Host "  任务创建完成！" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Cyan
+
+Write-Host "`n任务信息：" -ForegroundColor White
+Write-Host "  任务名称: VPS_Performance_Monitor" -ForegroundColor Gray
+Write-Host "  任务状态: $($task.State)" -ForegroundColor Gray
+Write-Host "  最后执行: $($taskInfo.LastRunTime)" -ForegroundColor Gray
+Write-Host "  下次执行: $($taskInfo.NextRunTime)" -ForegroundColor Gray
+Write-Host "  执行结果: $($taskInfo.LastTaskResult) (0=成功)" -ForegroundColor Gray
+
+Write-Host "`n触发器配置：" -ForegroundColor White
+Write-Host "  1. 开机后 1 分钟自动执行" -ForegroundColor Gray
+Write-Host "  2. 每 5 分钟重复执行" -ForegroundColor Gray
+
+Write-Host "`n========================================`n" -ForegroundColor Cyan
+
+# 10. 显示详细的触发器信息
+Write-Host "详细触发器信息：" -ForegroundColor White
+$triggers = (Get-ScheduledTask -TaskName "VPS_Performance_Monitor").Triggers
+foreach ($trigger in $triggers) {
+    Write-Host "  触发器类型: $($trigger.CimClass.CimClassName)" -ForegroundColor Gray
+    if ($trigger.Repetition) {
+        Write-Host "  重复间隔: $($trigger.Repetition.Interval)" -ForegroundColor Gray
+    }
 }
 
-Write-Host "`n========== 完成 ==========" -ForegroundColor Cyan
+Write-Host "`n✓ 完成！任务将每 5 分钟自动执行。" -ForegroundColor Green
+Write-Host "✓ 重启后也会自动运行。`n" -ForegroundColor Green

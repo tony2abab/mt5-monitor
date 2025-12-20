@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS nodes (
     last_heartbeat DATETIME,
     status TEXT CHECK(status IN ('online', 'offline')) DEFAULT 'offline',
     meta TEXT, -- JSON string for additional metadata like symbols
+    -- 帳戶淨值 NAV (始終發送)
+    nav REAL DEFAULT 0,              -- 帳戶淨值
     -- Monitor_OnlyHeartbeat 模式的場上數據
     open_buy_lots REAL DEFAULT 0,    -- 場上買單手數
     open_sell_lots REAL DEFAULT 0,   -- 場上賣單手數

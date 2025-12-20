@@ -163,6 +163,8 @@ router.post('/heartbeat', authMiddleware, (req, res) => {
     try {
         const { 
             id, name, broker, account, meta, client_group,
+            // 帳戶淨值 NAV (始終發送)
+            nav,
             // Monitor_OnlyHeartbeat 模式的場上數據
             open_buy_lots, open_sell_lots, floating_pl, balance, equity
         } = req.body;
@@ -182,7 +184,7 @@ router.post('/heartbeat', authMiddleware, (req, res) => {
         // Upsert node with heartbeat (including open position data if provided)
         db.upsertNode({ 
             id, name, broker, account, meta, client_group,
-            open_buy_lots, open_sell_lots, floating_pl, balance, equity
+            nav, open_buy_lots, open_sell_lots, floating_pl, balance, equity
         });
         // When heartbeat is received, ensure node is no longer muted
         heartbeatService.unmuteNode(id);

@@ -1,6 +1,6 @@
 function NodeCard({ node, onHide }) {
   const { id, name, broker, account, status, lastHeartbeatRelative, lastStatsRelative, todayABStats, todayStats, meta,
-          open_buy_lots, open_sell_lots, floating_pl, balance, equity } = node
+          nav, open_buy_lots, open_sell_lots, floating_pl, balance, equity } = node
   const isOnline = status === 'online'
   
   // 檢查是否有場上數據（Monitor_OnlyHeartbeat 模式）
@@ -79,6 +79,15 @@ function NodeCard({ node, onHide }) {
         hasRealABStats ? (
           // 顯示 A/B 系統統計（新格式）
           <div className="space-y-1">
+            {/* NAV 淨值 - 排在 A手數總數 之上 */}
+            {nav != null && nav > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-white min-w-[90px]">帳戶淨值:</span>
+                <span className={`text-xs font-medium ml-auto ${nav < 2000 ? 'text-red-400' : 'text-cyan-400'}`}>
+                  {nav.toFixed(2)}
+                </span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <span className="text-sm text-white min-w-[90px]">A手數總數:</span>
               <span className="text-xs font-medium text-cyan-400 ml-auto">
@@ -211,6 +220,15 @@ function NodeCard({ node, onHide }) {
           <div className="text-center text-xs text-yellow-400 mb-1 border-b border-yellow-400/30 pb-1">
             只顯示場上手數盈虧
           </div>
+          {/* NAV 淨值 */}
+          {nav != null && nav > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-white min-w-[90px]">帳戶淨值:</span>
+              <span className={`text-xs font-medium ml-auto ${nav < 2000 ? 'text-red-400' : 'text-cyan-400'}`}>
+                {nav.toFixed(2)}
+              </span>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <span className="text-sm text-white min-w-[90px]">Buy手數:</span>
             <span className="text-xs font-medium text-cyan-400 ml-auto">
