@@ -3,6 +3,7 @@ import Header from './components/Header'
 import NodeCard from './components/NodeCard'
 import NodeTable from './components/NodeTable'
 import HistoryView from './components/HistoryView'
+import VPSPerformance from './components/VPSPerformance'
 import LoadingSpinner from './components/LoadingSpinner'
 import ErrorAlert from './components/ErrorAlert'
 import LoginPage from './components/LoginPage'
@@ -14,7 +15,7 @@ function App() {
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [currentPage, setCurrentPage] = useState('monitor') // 'monitor' or 'history'
+  const [currentPage, setCurrentPage] = useState('monitor') // 'monitor', 'history', or 'vps'
   const [viewMode, setViewMode] = useState('grid') // 'grid' or 'table'
   const [sortBy, setSortBy] = useState('name') // 'name', 'profit', 'lots', 'status'
   const [filterText, setFilterText] = useState('')
@@ -438,6 +439,18 @@ function App() {
                   >
                     歷史數據
                   </button>
+                  {username === 'A' && (
+                    <button
+                      onClick={() => setCurrentPage('vps')}
+                      className={`px-6 py-2 rounded transition-all ${
+                        currentPage === 'vps' 
+                          ? 'bg-cyber-blue/20 text-cyber-blue font-semibold' 
+                          : 'text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      VPS效能
+                    </button>
+                  )}
                 </div>
 
                 {/* Client Group Selector */}
@@ -675,6 +688,18 @@ function App() {
                   >
                     歷史數據
                   </button>
+                  {username === 'A' && (
+                    <button
+                      onClick={() => setCurrentPage('vps')}
+                      className={`px-6 py-2 rounded transition-all ${
+                        currentPage === 'vps' 
+                          ? 'bg-cyber-blue/20 text-cyber-blue font-semibold' 
+                          : 'text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      VPS效能
+                    </button>
+                  )}
                 </div>
 
                 {/* Client Group Selector */}
@@ -745,6 +770,11 @@ function App() {
           {/* History Page Content */}
           {currentPage === 'history' && (
             <HistoryView allowedGroups={allowedGroups} selectedGroup={selectedGroup} username={username} />
+          )}
+
+          {/* VPS Performance Page Content */}
+          {currentPage === 'vps' && (
+            <VPSPerformance />
           )}
 
           {/* Monitor Page Content */}

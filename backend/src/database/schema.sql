@@ -118,6 +118,68 @@ CREATE TABLE IF NOT EXISTS report_requests (
     FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE
 );
 
+-- VPS monitoring tables
+-- VPS configuration table: stores VPS information
+CREATE TABLE IF NOT EXISTS vps_config (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vps_name TEXT NOT NULL UNIQUE,  -- VPS 識別名稱
+    vps_ip TEXT,                     -- VPS IP 地址
+    description TEXT,                -- 描述
+    is_active INTEGER DEFAULT 1,    -- 是否啟用監測 (0=停用, 1=啟用)
+    last_seen DATETIME,              -- 最後上報時間
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- VPS metrics table: stores performance metrics
+CREATE TABLE IF NOT EXISTS vps_metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vps_name TEXT NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    cpu_queue_length REAL DEFAULT 0,        -- 處理器隊列長度
+    cpu_usage_percent REAL DEFAULT 0,       -- CPU 使用率
+    context_switches_per_sec REAL DEFAULT 0, -- 上下文切換/秒
+    disk_queue_length REAL DEFAULT 0,       -- 磁碟隊列長度
+    disk_read_latency_ms REAL DEFAULT 0,    -- 讀取延遲 (毫秒)
+    disk_write_latency_ms REAL DEFAULT 0,   -- 寫入延遲 (毫秒)
+    memory_available_mb REAL DEFAULT 0,     -- 可用記憶體 (MB)
+    memory_usage_percent REAL DEFAULT 0,    -- 記憶體使用率
+    FOREIGN KEY (vps_name) REFERENCES vps_config(vps_name) ON DELETE CASCADE
+);
+
+-- VPS alert thresholds table: stores alert threshold configuration
+CREATE TABLE IF NOT EXISTS vps_alert_thresholds (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    metric_name TEXT NOT NULL UNIQUE,       -- 指標名稱
+    warning_threshold REAL NOT NULL,        -- 警告閾值
+    critical_threshold REAL NOT NULL,       -- 嚴重閾值
+    description TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- VPS alert history table: stores alert history
+CREATE TABLE IF NOT EXISTS vps_alert_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vps_name TEXT NOT NULL,
+    metric_name TEXT NOT NULL,
+    alert_level TEXT CHECK(alert_level IN ('warning', 'critical', 'recovery')) NOT NULL,
+    metric_value REAL NOT NULL,
+    threshold_value REAL NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    notified INTEGER DEFAULT 0,  -- 是否已發送 Telegram (0=未發送, 1=已發送)
+    FOREIGN KEY (vps_name) REFERENCES vps_config(vps_name) ON DELETE CASCADE
+);
+
+-- Initialize default alert thresholds
+INSERT OR IGNORE INTO vps_alert_thresholds (metric_name, warning_threshold, critical_threshold, description) VALUES
+    ('cpu_queue_length', 2.0, 5.0, 'CPU 隊列長度 - 超過表示 CPU 超賣'),
+    ('cpu_usage_percent', 80.0, 95.0, 'CPU 使用率'),
+    ('disk_queue_length', 2.0, 5.0, '磁碟隊列長度 - 超過表示 I/O 瓶頸'),
+    ('disk_read_latency_ms', 50.0, 100.0, '磁碟讀取延遲'),
+    ('disk_write_latency_ms', 50.0, 100.0, '磁碟寫入延遲'),
+    ('memory_usage_percent', 85.0, 95.0, '記憶體使用率');
+
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status);
 CREATE INDEX IF NOT EXISTS idx_nodes_last_heartbeat ON nodes(last_heartbeat);
@@ -126,3 +188,7 @@ CREATE INDEX IF NOT EXISTS idx_ab_stats_node_date ON ab_stats(node_id, date);
 CREATE INDEX IF NOT EXISTS idx_state_transitions_node ON state_transitions(node_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_at ON audit_log(at);
 CREATE INDEX IF NOT EXISTS idx_daily_snapshots_date ON daily_snapshots(snapshot_date);
+CREATE INDEX IF NOT EXISTS idx_vps_metrics_vps_timestamp ON vps_metrics(vps_name, timestamp);
+CREATE INDEX IF NOT EXISTS idx_vps_metrics_timestamp ON vps_metrics(timestamp);
+CREATE INDEX IF NOT EXISTS idx_vps_alert_history_vps ON vps_alert_history(vps_name);
+CREATE INDEX IF NOT EXISTS idx_vps_alert_history_timestamp ON vps_alert_history(timestamp);

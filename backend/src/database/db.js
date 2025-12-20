@@ -858,23 +858,221 @@ class DatabaseManager {
     
     // Initialize default users if not exist
     initializeDefaultUsers() {
-        // ç¢ºä? users è¡¨æ? show_ungrouped æ¬„ä?
+        // 確認 users 表有 show_ungrouped 欄位
         try {
             this.db.exec("ALTER TABLE users ADD COLUMN show_ungrouped INTEGER DEFAULT 1");
         } catch (e) {
-            // æ¬„ä?å·²å???
+            // 欄位已存在
         }
         
-        // ?¨æˆ¶ Aï¼šå??°å?è®Šæ•¸?²å?å¯†ç¢¼ï¼Œé¡¯ç¤ºç„¡?†ç?ç¯€é»?
+        // 用戶 A：從環境變數讀取密碼，顯示無分組節點
         const passwordA = process.env.WEB_PASSWORD || 'admin123';
-        this.createUser('A', passwordA, 'A,B,C', true);  // é¡¯ç¤º?¡å?çµ„ç?é»?
+        this.createUser('A', passwordA, 'A,B,C', true);  // 顯示所有分組節點
         console.log('User A configured: groups=A,B,C, showUngrouped=true');
         
-        // ?¨æˆ¶ Bï¼šå�ª?‹å?çµ?Cï¼Œä?é¡¯ç¤º?¡å?çµ„ç?é»?
-        this.createUser('B', 'tt8899TT', 'C', false);  // ä¸�é¡¯ç¤ºç„¡?†ç?ç¯€é»?
+        // 用戶 B：只查看分組C，不顯示無分組節點
+        this.createUser('B', 'tt8899TT', 'C', false);  // 不顯示無分組節點
         console.log('User B configured: groups=C, showUngrouped=false');
     }
-    
+
+    // ========== VPS Monitoring Operations ==========
+
+    // VPS Config operations
+    upsertVPSConfig(vpsData) {
+        const { vps_name, vps_ip, description, is_active } = vpsData;
+        const stmt = this.db.prepare(`
+            INSERT INTO vps_config (vps_name, vps_ip, description, is_active, last_seen, updated_at)
+            VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+            ON CONFLICT(vps_name) DO UPDATE SET
+                vps_ip = COALESCE(excluded.vps_ip, vps_ip),
+                description = COALESCE(excluded.description, description),
+                is_active = COALESCE(excluded.is_active, is_active),
+                last_seen = datetime('now'),
+                updated_at = datetime('now')
+        `);
+        return stmt.run(vps_name, vps_ip || null, description || null, is_active !== undefined ? is_active : 1);
+    }
+
+    getVPSConfig(vpsName) {
+        const stmt = this.db.prepare('SELECT * FROM vps_config WHERE vps_name = ?');
+        return stmt.get(vpsName);
+    }
+
+    getAllVPSConfigs() {
+        const stmt = this.db.prepare('SELECT * FROM vps_config ORDER BY vps_name ASC');
+        return stmt.all();
+    }
+
+    updateVPSConfigActive(vpsName, isActive) {
+        const stmt = this.db.prepare(`
+            UPDATE vps_config 
+            SET is_active = ?, updated_at = datetime('now')
+            WHERE vps_name = ?
+        `);
+        return stmt.run(isActive ? 1 : 0, vpsName);
+    }
+
+    deleteVPSConfig(vpsName) {
+        const stmt = this.db.prepare('DELETE FROM vps_config WHERE vps_name = ?');
+        return stmt.run(vpsName);
+    }
+
+    // VPS Metrics operations
+    insertVPSMetrics(metricsData) {
+        const {
+            vps_name,
+            cpu_queue_length,
+            cpu_usage_percent,
+            context_switches_per_sec,
+            disk_queue_length,
+            disk_read_latency_ms,
+            disk_write_latency_ms,
+            memory_available_mb,
+            memory_usage_percent
+        } = metricsData;
+
+        const stmt = this.db.prepare(`
+            INSERT INTO vps_metrics (
+                vps_name, timestamp,
+                cpu_queue_length, cpu_usage_percent, context_switches_per_sec,
+                disk_queue_length, disk_read_latency_ms, disk_write_latency_ms,
+                memory_available_mb, memory_usage_percent
+            )
+            VALUES (?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        return stmt.run(
+            vps_name,
+            cpu_queue_length || 0,
+            cpu_usage_percent || 0,
+            context_switches_per_sec || 0,
+            disk_queue_length || 0,
+            disk_read_latency_ms || 0,
+            disk_write_latency_ms || 0,
+            memory_available_mb || 0,
+            memory_usage_percent || 0
+        );
+    }
+
+    getLatestVPSMetrics(vpsName) {
+        const stmt = this.db.prepare(`
+            SELECT * FROM vps_metrics 
+            WHERE vps_name = ? 
+            ORDER BY timestamp DESC 
+            LIMIT 1
+        `);
+        return stmt.get(vpsName);
+    }
+
+    getVPSMetricsHistory(vpsName, hours = 24) {
+        const stmt = this.db.prepare(`
+            SELECT * FROM vps_metrics 
+            WHERE vps_name = ? 
+            AND timestamp >= datetime('now', '-' || ? || ' hours')
+            ORDER BY timestamp DESC
+        `);
+        return stmt.all(vpsName, hours);
+    }
+
+    getAllLatestVPSMetrics() {
+        // 
+        const stmt = this.db.prepare(`
+            SELECT m.* FROM vps_metrics m
+            INNER JOIN (
+                SELECT vps_name, MAX(timestamp) as max_timestamp
+                FROM vps_metrics
+                GROUP BY vps_name
+            ) latest ON m.vps_name = latest.vps_name AND m.timestamp = latest.max_timestamp
+            ORDER BY m.vps_name ASC
+        `);
+        return stmt.all();
+    }
+
+    cleanupOldVPSMetrics(days = 7) {
+        const stmt = this.db.prepare(`
+            DELETE FROM vps_metrics 
+            WHERE timestamp < datetime('now', '-' || ? || ' days')
+        `);
+        return stmt.run(days);
+    }
+
+    // VPS Alert Thresholds operations
+    getAllVPSThresholds() {
+        const stmt = this.db.prepare('SELECT * FROM vps_alert_thresholds ORDER BY metric_name ASC');
+        return stmt.all();
+    }
+
+    getVPSThreshold(metricName) {
+        const stmt = this.db.prepare('SELECT * FROM vps_alert_thresholds WHERE metric_name = ?');
+        return stmt.get(metricName);
+    }
+
+    updateVPSThreshold(metricName, warningThreshold, criticalThreshold) {
+        const stmt = this.db.prepare(`
+            UPDATE vps_alert_thresholds 
+            SET warning_threshold = ?, critical_threshold = ?, updated_at = datetime('now')
+            WHERE metric_name = ?
+        `);
+        return stmt.run(warningThreshold, criticalThreshold, metricName);
+    }
+
+    // VPS Alert History operations
+    insertVPSAlert(alertData) {
+        const { vps_name, metric_name, alert_level, metric_value, threshold_value } = alertData;
+        const stmt = this.db.prepare(`
+            INSERT INTO vps_alert_history (
+                vps_name, metric_name, alert_level, metric_value, threshold_value, timestamp, notified
+            )
+            VALUES (?, ?, ?, ?, ?, datetime('now'), 0)
+        `);
+        return stmt.run(vps_name, metric_name, alert_level, metric_value, threshold_value);
+    }
+
+    getRecentVPSAlerts(vpsName = null, hours = 24) {
+        if (vpsName) {
+            const stmt = this.db.prepare(`
+                SELECT * FROM vps_alert_history 
+                WHERE vps_name = ? 
+                AND timestamp >= datetime('now', '-' || ? || ' hours')
+                ORDER BY timestamp DESC
+            `);
+            return stmt.all(vpsName, hours);
+        } else {
+            const stmt = this.db.prepare(`
+                SELECT * FROM vps_alert_history 
+                WHERE timestamp >= datetime('now', '-' || ? || ' hours')
+                ORDER BY timestamp DESC
+            `);
+            return stmt.all(hours);
+        }
+    }
+
+    getUnnotifiedVPSAlerts() {
+        const stmt = this.db.prepare(`
+            SELECT * FROM vps_alert_history 
+            WHERE notified = 0 
+            ORDER BY timestamp ASC
+        `);
+        return stmt.all();
+    }
+
+    markVPSAlertNotified(alertId) {
+        const stmt = this.db.prepare(`
+            UPDATE vps_alert_history 
+            SET notified = 1 
+            WHERE id = ?
+        `);
+        return stmt.run(alertId);
+    }
+
+    cleanupOldVPSAlerts(days = 30) {
+        const stmt = this.db.prepare(`
+            DELETE FROM vps_alert_history 
+            WHERE timestamp < datetime('now', '-' || ? || ' days')
+        `);
+        return stmt.run(days);
+    }
+
     close() {
         this.db.close();
     }
