@@ -38,6 +38,7 @@ function App() {
   const [pollInterval, setPollInterval] = useState(90)  // 輪詢間隔（分鐘），預設90分鐘
   const [autoPollEnabled, setAutoPollEnabled] = useState(false)  // 是否啟用自動輪詢
   const [lastPollTime, setLastPollTime] = useState(null)  // 上次輪詢時間
+  const [nextAutoPollTime, setNextAutoPollTime] = useState(null)  // 下次自動輪詢時間
   
   // 檢查登入狀態
   useEffect(() => {
@@ -257,14 +258,31 @@ function App() {
 
   // 自動輪詢 - 每隔 pollInterval 分鐘觸發一次上報請求
   useEffect(() => {
-    if (!autoPollEnabled || pollInterval <= 0) return
+    if (!autoPollEnabled || pollInterval <= 0) {
+      setNextAutoPollTime(null)
+      return
+    }
     
     const intervalMs = pollInterval * 60 * 1000
+    
+    // 設定下次輪詢時間
+    const updateNextPollTime = () => {
+      const next = new Date(Date.now() + intervalMs)
+      setNextAutoPollTime(next)
+    }
+    
+    // 立即設定下次輪詢時間
+    updateNextPollTime()
+    
     const pollTimer = setInterval(() => {
       triggerReportRequest()
+      updateNextPollTime()  // 輪詢後更新下次時間
     }, intervalMs)
     
-    return () => clearInterval(pollTimer)
+    return () => {
+      clearInterval(pollTimer)
+      setNextAutoPollTime(null)
+    }
   }, [autoPollEnabled, pollInterval, triggerReportRequest])
 
   // Filter and sort nodes
@@ -650,11 +668,14 @@ function App() {
                 <div className="text-sm text-white ml-auto">
                   <span>
                     最後上報: {snapshotInfo.lastSnapshot 
-                      ? `${snapshotInfo.lastSnapshot.platform} (${snapshotInfo.lastSnapshot.hk})`
+                      ? snapshotInfo.lastSnapshot.hk
                       : '尚無記錄'
                     }
                     {' | '}
-                    下次快照: {snapshotInfo.nextSnapshot.platform} ({snapshotInfo.nextSnapshot.hk})
+                    下次快照: {snapshotInfo.nextSnapshot.hk}
+                    {nextAutoPollTime && (
+                      <> | 下次自動輪詢: {nextAutoPollTime.toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit' })}</>
+                    )}
                   </span>
                 </div>
               )}
