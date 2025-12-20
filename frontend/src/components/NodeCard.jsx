@@ -74,20 +74,23 @@ function NodeCard({ node, onHide }) {
         </div>
       </div>
 
+      {/* NAV 淨值 - 獨立顯示，不受統計數據條件限制 */}
+      {nav != null && nav > 0 && (
+        <div className="mb-2 pb-2 border-b border-gray-400/50">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-white min-w-[90px]">帳戶淨值:</span>
+            <span className={`text-xs font-medium ml-auto ${nav < 2000 ? 'text-red-400' : 'text-cyan-400'}`}>
+              {nav.toFixed(2)}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* A/B System Stats */}
       {stats ? (
         hasRealABStats ? (
           // 顯示 A/B 系統統計（新格式）
           <div className="space-y-1">
-            {/* NAV 淨值 - 排在 A手數總數 之上 */}
-            {nav != null && nav > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-white min-w-[90px]">帳戶淨值:</span>
-                <span className={`text-xs font-medium ml-auto ${nav < 2000 ? 'text-red-400' : 'text-cyan-400'}`}>
-                  {nav.toFixed(2)}
-                </span>
-              </div>
-            )}
             <div className="flex items-center gap-2">
               <span className="text-sm text-white min-w-[90px]">A手數總數:</span>
               <span className="text-xs font-medium text-cyan-400 ml-auto">
@@ -216,15 +219,6 @@ function NodeCard({ node, onHide }) {
           <div className="text-center text-xs text-yellow-400 mb-1 border-b border-yellow-400/30 pb-1">
             只顯示場上手數盈虧
           </div>
-          {/* NAV 淨值 */}
-          {nav != null && nav > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-white min-w-[90px]">帳戶淨值:</span>
-              <span className={`text-xs font-medium ml-auto ${nav < 2000 ? 'text-red-400' : 'text-cyan-400'}`}>
-                {nav.toFixed(2)}
-              </span>
-            </div>
-          )}
           <div className="flex items-center gap-2">
             <span className="text-sm text-white min-w-[90px]">Buy手數:</span>
             <span className="text-xs font-medium text-cyan-400 ml-auto">
