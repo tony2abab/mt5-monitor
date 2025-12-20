@@ -4,7 +4,7 @@
 
 $API_ENDPOINT = "http://81.0.248.137:8080/api/vps/metrics"
 $API_KEY = "secret_key_2025_9093942525abcdxyz_"
-$VPS_NAME = $env:COMPUTERNAME
+$VPS_NAME = "VPS-B8 (CPU6)"
 $VPS_IP = ""
 $VPS_DESCRIPTION = ""
 

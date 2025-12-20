@@ -12,6 +12,33 @@ function VPSPerformance() {
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [expandedVPS, setExpandedVPS] = useState(null)
   const [historyData, setHistoryData] = useState({})
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
+
+  // 刪除 VPS
+  const deleteVPS = async (vpsName) => {
+    try {
+      const token = localStorage.getItem('sessionToken')
+      const response = await fetch(`${API_BASE}/vps/config/${encodeURIComponent(vpsName)}`, {
+        method: 'DELETE',
+        headers: token ? { 'X-Session-Token': token } : {}
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete VPS')
+      }
+      
+      const data = await response.json()
+      if (data.ok) {
+        setDeleteConfirm(null)
+        fetchVPSList() // 重新載入列表
+      } else {
+        throw new Error(data.error || 'Unknown error')
+      }
+    } catch (err) {
+      console.error('Delete VPS error:', err)
+      setError(err.message)
+    }
+  }
 
   // 獲取 VPS 列表
   const fetchVPSList = async () => {
@@ -236,6 +263,7 @@ function VPSPerformance() {
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">CPU % (6)</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">記憶體 % (7)</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">最後更新</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -291,10 +319,26 @@ function VPSPerformance() {
                         <td className="px-4 py-3 text-center text-sm text-gray-400">
                           {vps.minutesSinceLastSeen < 1 ? '剛剛' : `${vps.minutesSinceLastSeen}分鐘前`}
                         </td>
+                        <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => setDeleteConfirm(vps.vps_name)}
+                            className="px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/50 rounded hover:bg-red-500/30 transition-all text-sm"
+                          >
+                            🗑️ 刪除
+                          </button>
+                        </td>
                       </>
                     ) : (
                       <>
                         <td className="px-4 py-3 text-center text-gray-500" colSpan="8">無數據</td>
+                        <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => setDeleteConfirm(vps.vps_name)}
+                            className="px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/50 rounded hover:bg-red-500/30 transition-all text-sm"
+                          >
+                            🗑️ 刪除
+                          </button>
+                        </td>
                       </>
                     )}
                   </tr>
@@ -302,6 +346,35 @@ function VPSPerformance() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* 刪除確認對話框 */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-cyber-darker border border-red-500/50 rounded-lg p-6 max-w-md mx-4">
+            <h3 className="text-xl font-bold text-red-400 mb-4">⚠️ 確認刪除</h3>
+            <p className="text-gray-300 mb-2">
+              確定要刪除 VPS <span className="font-bold text-white">{deleteConfirm}</span> 嗎？
+            </p>
+            <p className="text-sm text-gray-500 mb-6">
+              此操作將刪除該 VPS 的所有配置、歷史數據和告警記錄，且無法復原。
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="px-4 py-2 bg-gray-700/50 text-gray-300 border border-gray-600/50 rounded hover:bg-gray-700 transition-all"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => deleteVPS(deleteConfirm)}
+                className="px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/50 rounded hover:bg-red-500/30 transition-all"
+              >
+                確定刪除
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
