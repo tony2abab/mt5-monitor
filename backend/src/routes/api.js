@@ -299,7 +299,8 @@ router.post('/ab-stats', authMiddleware, (req, res) => {
             id, date, 
             a_lots_total, b_lots_total, lots_diff,
             a_profit_total, b_profit_total, ab_profit_total,
-            a_interest_total, cost_per_lot, commission_per_lot, open_lots
+            a_interest_total, cost_per_lot, commission_per_lot, open_lots,
+            nav  // 帳戶淨值
         } = req.body;
         
         // Validation
@@ -334,6 +335,11 @@ router.post('/ab-stats', authMiddleware, (req, res) => {
             commission_per_lot: commission_per_lot || 0,
             open_lots: open_lots || 0
         });
+        
+        // 更新 nodes 表中的 NAV 淨值
+        if (nav !== undefined) {
+            db.updateNodeNav(id, nav);
+        }
         
         // 自動創建/更新當天的快照（讓歷史數據即時可見）
         // 使用當前交易日期，確保與頂部總表一致

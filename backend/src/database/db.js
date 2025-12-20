@@ -185,6 +185,16 @@ class DatabaseManager {
         return stmt.run(status, id);
     }
     
+    // 更新 nodes 表中的 NAV 淨值
+    updateNodeNav(id, nav) {
+        const stmt = this.db.prepare(`
+            UPDATE nodes 
+            SET nav = ?, updated_at = datetime('now')
+            WHERE id = ?
+        `);
+        return stmt.run(nav, id);
+    }
+    
     // Delete a node and all its related data
     deleteNode(id) {
         // Delete from all related tables
