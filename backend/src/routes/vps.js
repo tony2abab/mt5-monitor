@@ -73,9 +73,28 @@ async function sendVPSAlert(alert) {
     const emoji = alert.alert_level === 'critical' ? '🔴' : '⚠️';
     const levelText = alert.alert_level === 'critical' ? '嚴重' : '警告';
     
+    // 正常率告警的特殊處理
+    if (alert.metric_name === 'uptime_rate') {
+        const message = `⚠️ VPS 正常率告警
+
+VPS: ${alert.vps_name}
+指標: 平均正常率
+當前值: ${alert.metric_value.toFixed(1)}%
+閾值: ${alert.threshold_value}% (警告)
+時間: ${new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}
+
+${alert.description}
+
+建議檢查該 VPS 的網路連線或監測腳本是否正常運作。`;
+        
+        await telegram.sendMessage(message);
+        return;
+    }
+    
     const metricNames = {
         'cpu_queue_length': 'CPU 隊列長度',
         'cpu_usage_percent': 'CPU 使用率',
+        'context_switches_per_sec': '上下文切換',
         'disk_queue_length': '磁碟隊列長度',
         'disk_read_latency_ms': '磁碟讀取延遲',
         'disk_write_latency_ms': '磁碟寫入延遲',
@@ -119,10 +138,26 @@ router.post('/metrics', authMiddleware, async (req, res) => {
         // 檢查告警閾值
         const alerts = checkMetricThresholds(vps_name, metrics);
         
+        // 檢查正常率（過去24小時）
+        const uptimeStats = db.getVPSUptimeRate(vps_name, 24);
+        if (uptimeStats.uptimeRate < 90) {
+            const uptimeAlert = {
+                vps_name,
+                metric_name: 'uptime_rate',
+                alert_level: 'warning',
+                metric_value: uptimeStats.uptimeRate,
+                threshold_value: 90,
+                description: `過去24小時收到 ${uptimeStats.receivedCount}/${uptimeStats.expectedCount} 次數據上報`
+            };
+            alerts.push(uptimeAlert);
+        }
+        
         // 處理告警
         for (const alert of alerts) {
-            // 儲存告警歷史
-            db.insertVPSAlert(alert);
+            // 儲存告警歷史（正常率告警不存入資料庫）
+            if (alert.metric_name !== 'uptime_rate') {
+                db.insertVPSAlert(alert);
+            }
             
             // 檢查是否應該發送 Telegram 通知
             if (!shouldSuppressAlert(alert.vps_name, alert.metric_name)) {
@@ -171,11 +206,15 @@ router.get('/list', webAuthMiddleware, (req, res) => {
         const vpsList = configs.map(config => {
             const metrics = metricsMap.get(config.vps_name);
             
+            // 计算过去24小时的正常率
+            const uptimeStats = db.getVPSUptimeRate(config.vps_name, 24);
+            
             if (!metrics) {
                 return {
                     ...config,
                     status: 'offline',
-                    metrics: null
+                    metrics: null,
+                    uptimeRate: uptimeStats.uptimeRate
                 };
             }
             
@@ -189,7 +228,8 @@ router.get('/list', webAuthMiddleware, (req, res) => {
                     ...config,
                     status: 'offline',
                     metrics,
-                    minutesSinceLastSeen: Math.floor(minutesSinceLastSeen)
+                    minutesSinceLastSeen: Math.floor(minutesSinceLastSeen),
+                    uptimeRate: uptimeStats.uptimeRate
                 };
             }
             
@@ -215,7 +255,8 @@ router.get('/list', webAuthMiddleware, (req, res) => {
                 status,
                 metrics,
                 alerts,
-                minutesSinceLastSeen: Math.floor(minutesSinceLastSeen)
+                minutesSinceLastSeen: Math.floor(minutesSinceLastSeen),
+                uptimeRate: uptimeStats.uptimeRate
             };
         });
         

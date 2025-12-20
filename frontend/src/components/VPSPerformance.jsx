@@ -276,6 +276,7 @@ function VPSPerformance({ setCurrentPage }) {
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">VPS 名稱</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">狀態</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">平均正常%</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">CPU 隊列 (1)</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">上下文切換 (2)</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">磁碟隊列 (3)</th>
@@ -314,6 +315,9 @@ function VPSPerformance({ setCurrentPage }) {
                         {statusDisplay.icon} {statusDisplay.text}
                       </span>
                     </td>
+                    <td className={`px-4 py-3 text-center font-semibold ${vps.uptimeRate < 90 ? 'bg-red-500/30 text-red-300' : 'text-green-400'}`}>
+                      {vps.uptimeRate !== undefined ? `${vps.uptimeRate.toFixed(1)}%` : '-'}
+                    </td>
                     {metrics ? (
                       <>
                         <td className={`px-4 py-3 text-center ${getValueClass(metrics.cpu_queue_length, 'cpu_queue_length')}`}>
@@ -351,7 +355,7 @@ function VPSPerformance({ setCurrentPage }) {
                       </>
                     ) : (
                       <>
-                        <td className="px-4 py-3 text-center text-gray-500" colSpan="8">無數據</td>
+                        <td className="px-4 py-3 text-center text-gray-500" colSpan="9">無數據</td>
                         <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => setDeleteConfirm(vps.vps_name)}

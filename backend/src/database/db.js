@@ -996,6 +996,28 @@ class DatabaseManager {
         return stmt.run(days);
     }
 
+    // 计算 VPS 过去24小时的正常率（基于每5分钟应上报一次）
+    getVPSUptimeRate(vpsName, hours = 24) {
+        const stmt = this.db.prepare(`
+            SELECT COUNT(*) as received_count
+            FROM vps_metrics 
+            WHERE vps_name = ? 
+            AND timestamp >= datetime('now', '-' || ? || ' hours')
+        `);
+        const result = stmt.get(vpsName, hours);
+        const receivedCount = result.received_count || 0;
+        
+        // 每5分钟应上报一次，24小时 = 288次
+        const expectedCount = (hours * 60) / 5;
+        const uptimeRate = expectedCount > 0 ? (receivedCount / expectedCount) * 100 : 0;
+        
+        return {
+            receivedCount,
+            expectedCount,
+            uptimeRate: Math.min(100, uptimeRate) // 最高100%
+        };
+    }
+
     // VPS Alert Thresholds operations
     getAllVPSThresholds() {
         const stmt = this.db.prepare('SELECT * FROM vps_alert_thresholds ORDER BY metric_name ASC');
