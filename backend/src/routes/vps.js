@@ -391,4 +391,23 @@ router.delete('/config/:vpsName', webAuthMiddleware, (req, res) => {
     }
 });
 
+// POST /api/vps/reset-uptime/:vpsName - 重置 VPS 平均正常率（需要登入，僅管理員）
+router.post('/reset-uptime/:vpsName', webAuthMiddleware, (req, res) => {
+    try {
+        // 檢查是否為管理員（用戶 A）
+        if (req.user && req.user.username !== 'A') {
+            return res.status(403).json({ ok: false, error: 'Access denied. Admin only.' });
+        }
+        
+        const { vpsName } = req.params;
+        
+        db.resetVPSUptimeRate(vpsName);
+        
+        res.json({ ok: true, message: 'VPS uptime rate reset to 100%' });
+    } catch (error) {
+        console.error('Error in POST /api/vps/reset-uptime/:vpsName:', error);
+        res.status(500).json({ ok: false, error: 'Internal server error' });
+    }
+});
+
 module.exports = router;

@@ -39,6 +39,9 @@ class DatabaseManager {
         // 資料庫遷移：為現有 nodes 表添加場上數據欄位
         this.migrateNodesTable();
         
+        // 資料庫遷移：更新 VPS 告警閾值
+        this.migrateVPSThresholds();
+        
         console.log('Database initialized successfully');
     }
     
@@ -69,6 +72,24 @@ class DatabaseManager {
                     console.error(`Migration error for ${col.name}:`, err.message);
                 }
             }
+        }
+    }
+    
+    // 資料庫遷移：更新 VPS 告警閾值
+    migrateVPSThresholds() {
+        try {
+            // 更新 CPU 隊列的嚴重閾值從 5.0 改為 10.0
+            const stmt = this.db.prepare(`
+                UPDATE vps_alert_thresholds 
+                SET critical_threshold = 10.0, updated_at = datetime('now')
+                WHERE metric_name = 'cpu_queue_length' AND critical_threshold = 5.0
+            `);
+            const result = stmt.run();
+            if (result.changes > 0) {
+                console.log('Migration: Updated cpu_queue_length critical threshold from 5.0 to 10.0');
+            }
+        } catch (err) {
+            console.error('Migration error for VPS thresholds:', err.message);
         }
     }
     
@@ -1024,18 +1045,23 @@ class DatabaseManager {
         const result = stmt.get(vpsName, hours);
         const criticalCount = result.critical_count || 0;
         
-        // 每5分钟应上报一次，24小时 = 288次
-        const expectedCount = (hours * 60) / 5;
-        
-        // 从100%开始，每次严重告警扣减 1/288
-        const normalCount = expectedCount - criticalCount;
-        const uptimeRate = expectedCount > 0 ? (normalCount / expectedCount) * 100 : 100;
+        // 每次严重告警扣减1%，从100开始
+        const uptimeRate = 100 - criticalCount;
         
         return {
             criticalCount,
-            expectedCount,
+            expectedCount: 100,  // 固定为100，方便理解
             uptimeRate: Math.max(0, Math.min(100, uptimeRate)) // 0-100%
         };
+    }
+
+    // 重置 VPS 的平均正常率（清除历史严重告警记录）
+    resetVPSUptimeRate(vpsName) {
+        const stmt = this.db.prepare(`
+            DELETE FROM vps_alert_history 
+            WHERE vps_name = ? AND alert_level = 'critical'
+        `);
+        return stmt.run(vpsName);
     }
 
     // VPS Alert Thresholds operations

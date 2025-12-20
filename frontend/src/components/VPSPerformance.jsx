@@ -13,6 +13,7 @@ function VPSPerformance({ setCurrentPage }) {
   const [expandedVPS, setExpandedVPS] = useState(null)
   const [historyData, setHistoryData] = useState({})
   const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [resetConfirm, setResetConfirm] = useState(null)
 
   // 刪除 VPS
   const deleteVPS = async (vpsName) => {
@@ -36,6 +37,32 @@ function VPSPerformance({ setCurrentPage }) {
       }
     } catch (err) {
       console.error('Delete VPS error:', err)
+      setError(err.message)
+    }
+  }
+
+  // 重置 VPS 平均正常率
+  const resetUptimeRate = async (vpsName) => {
+    try {
+      const token = localStorage.getItem('sessionToken')
+      const response = await fetch(`${API_BASE}/vps/reset-uptime/${encodeURIComponent(vpsName)}`, {
+        method: 'POST',
+        headers: token ? { 'X-Session-Token': token } : {}
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to reset uptime rate')
+      }
+      
+      const data = await response.json()
+      if (data.ok) {
+        setResetConfirm(null)
+        fetchVPSList() // 重新載入列表
+      } else {
+        throw new Error(data.error || 'Unknown error')
+      }
+    } catch (err) {
+      console.error('Reset uptime rate error:', err)
       setError(err.message)
     }
   }
@@ -315,8 +342,24 @@ function VPSPerformance({ setCurrentPage }) {
                         {statusDisplay.icon} {statusDisplay.text}
                       </span>
                     </td>
-                    <td className={`px-4 py-3 text-center font-semibold ${vps.uptimeRate < 90 ? 'bg-red-500/30 text-red-300' : 'text-green-400'}`}>
-                      {vps.uptimeRate !== undefined ? `${vps.uptimeRate.toFixed(1)}%` : '-'}
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <span className={`font-semibold ${vps.uptimeRate < 90 ? 'bg-red-500/30 text-red-300 px-2 py-1 rounded' : 'text-green-400'}`}>
+                          {vps.uptimeRate !== undefined ? `${vps.uptimeRate.toFixed(1)}%` : '-'}
+                        </span>
+                        {vps.uptimeRate !== undefined && vps.uptimeRate < 100 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setResetConfirm(vps.vps_name)
+                            }}
+                            className="px-2 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/50 rounded hover:bg-blue-500/30 transition-all text-xs"
+                            title="重置平均正常率到100%"
+                          >
+                            🔄
+                          </button>
+                        )}
+                      </div>
                     </td>
                     {metrics ? (
                       <>
@@ -397,6 +440,35 @@ function VPSPerformance({ setCurrentPage }) {
                 className="px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/50 rounded hover:bg-red-500/30 transition-all"
               >
                 確定刪除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 重置平均正常率確認對話框 */}
+      {resetConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-cyber-darker border border-blue-500/50 rounded-lg p-6 max-w-md mx-4">
+            <h3 className="text-xl font-bold text-blue-400 mb-4">🔄 確認重置</h3>
+            <p className="text-gray-300 mb-2">
+              確定要重置 VPS <span className="font-bold text-white">{resetConfirm}</span> 的平均正常率嗎？
+            </p>
+            <p className="text-sm text-gray-500 mb-6">
+              此操作將清除該 VPS 的所有严重告警記錄，平均正常率將重置為 100%。
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setResetConfirm(null)}
+                className="px-4 py-2 bg-gray-700/50 text-gray-300 border border-gray-600/50 rounded hover:bg-gray-700 transition-all"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => resetUptimeRate(resetConfirm)}
+                className="px-4 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/50 rounded hover:bg-blue-500/30 transition-all"
+              >
+                確定重置
               </button>
             </div>
           </div>

@@ -175,7 +175,7 @@ CREATE TABLE IF NOT EXISTS vps_alert_history (
 
 -- Initialize default alert thresholds
 INSERT OR IGNORE INTO vps_alert_thresholds (metric_name, warning_threshold, critical_threshold, description) VALUES
-    ('cpu_queue_length', 2.0, 5.0, 'CPU 隊列長度 - 超過表示 CPU 超賣'),
+    ('cpu_queue_length', 2.0, 10.0, 'CPU 隊列長度 - 超過表示 CPU 超賣'),
     ('context_switches_per_sec', 50000.0, 100000.0, '上下文切換/秒 - 過高表示 CPU 超賣'),
     ('cpu_usage_percent', 80.0, 95.0, 'CPU 使用率'),
     ('disk_queue_length', 2.0, 5.0, '磁碟隊列長度 - 超過表示 I/O 瓶頸'),
