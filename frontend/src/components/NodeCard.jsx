@@ -113,18 +113,14 @@ function NodeCard({ node, onHide }) {
             
             <div className="flex items-center gap-2">
               <span className="text-sm text-white min-w-[90px]">A盈利總數:</span>
-              <span className={`text-xs font-medium ml-auto ${
-                (todayABStats?.a_profit_total ?? 0) >= 0 ? 'text-cyber-green' : 'text-red-400'
-              }`}>
+              <span className="text-xs font-medium ml-auto text-cyan-400">
                 {(todayABStats?.a_profit_total ?? 0) >= 0 ? '+' : ''}{(todayABStats?.a_profit_total ?? 0).toFixed(2)}
               </span>
             </div>
             
             <div className="flex items-center gap-2">
               <span className="text-sm text-white min-w-[90px]">B盈利總數:</span>
-              <span className={`text-xs font-medium ml-auto ${
-                (todayABStats?.b_profit_total ?? 0) >= 0 ? 'text-cyber-green' : 'text-red-400'
-              }`}>
+              <span className="text-xs font-medium ml-auto text-cyan-400">
                 {(todayABStats?.b_profit_total ?? 0) >= 0 ? '+' : ''}{(todayABStats?.b_profit_total ?? 0).toFixed(2)}
               </span>
             </div>
