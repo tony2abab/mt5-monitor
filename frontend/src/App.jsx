@@ -36,7 +36,7 @@ function App() {
   const [selectedGroup, setSelectedGroup] = useState('all')  // 當前選擇的分組
   const [showUngrouped, setShowUngrouped] = useState(true)  // 是否顯示無分組節點
   const [pollInterval, setPollInterval] = useState(90)  // 輪詢間隔（分鐘），預設90分鐘
-  const [autoPollEnabled, setAutoPollEnabled] = useState(false)  // 是否啟用自動輪詢
+  const [autoPollEnabled, setAutoPollEnabled] = useState(true)  // 是否啟用自動輪詢（預設啟用）
   const [lastPollTime, setLastPollTime] = useState(null)  // 上次輪詢時間
   const [nextAutoPollTime, setNextAutoPollTime] = useState(null)  // 下次自動輪詢時間
   
