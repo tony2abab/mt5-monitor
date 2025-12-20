@@ -180,7 +180,7 @@ router.get('/list', webAuthMiddleware, (req, res) => {
             }
             
             // 檢查最後更新時間（超過 10 分鐘視為離線）
-            const lastSeen = new Date(metrics.timestamp);
+            const lastSeen = new Date(metrics.timestamp + ' UTC');
             const now = new Date();
             const minutesSinceLastSeen = (now - lastSeen) / 1000 / 60;
             

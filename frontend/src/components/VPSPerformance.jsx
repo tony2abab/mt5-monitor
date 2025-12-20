@@ -228,12 +228,13 @@ function VPSPerformance() {
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">VPS 名稱</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">狀態</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">CPU 隊列</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">CPU %</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">磁碟隊列</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">讀延遲</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">寫延遲</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">記憶體 %</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">CPU 隊列 (1)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">上下文切換 (2)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">磁碟隊列 (3)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">讀延遲 (4)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">寫延遲 (5)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">CPU % (6)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">記憶體 % (7)</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">最後更新</th>
               </tr>
             </thead>
@@ -269,8 +270,8 @@ function VPSPerformance() {
                         <td className={`px-4 py-3 text-center ${getValueClass(metrics.cpu_queue_length, 'cpu_queue_length')}`}>
                           {formatValue(metrics.cpu_queue_length, 'cpu_queue_length')}
                         </td>
-                        <td className={`px-4 py-3 text-center ${getValueClass(metrics.cpu_usage_percent, 'cpu_usage_percent')}`}>
-                          {formatValue(metrics.cpu_usage_percent, 'cpu_usage_percent')}
+                        <td className={`px-4 py-3 text-center ${getValueClass(metrics.context_switches_per_sec, 'context_switches_per_sec')}`}>
+                          {formatValue(metrics.context_switches_per_sec, 'context_switches_per_sec')}
                         </td>
                         <td className={`px-4 py-3 text-center ${getValueClass(metrics.disk_queue_length, 'disk_queue_length')}`}>
                           {formatValue(metrics.disk_queue_length, 'disk_queue_length')}
@@ -281,6 +282,9 @@ function VPSPerformance() {
                         <td className={`px-4 py-3 text-center ${getValueClass(metrics.disk_write_latency_ms, 'disk_write_latency_ms')}`}>
                           {formatValue(metrics.disk_write_latency_ms, 'disk_write_latency_ms')}
                         </td>
+                        <td className={`px-4 py-3 text-center ${getValueClass(metrics.cpu_usage_percent, 'cpu_usage_percent')}`}>
+                          {formatValue(metrics.cpu_usage_percent, 'cpu_usage_percent')}
+                        </td>
                         <td className={`px-4 py-3 text-center ${getValueClass(metrics.memory_usage_percent, 'memory_usage_percent')}`}>
                           {formatValue(metrics.memory_usage_percent, 'memory_usage_percent')}
                         </td>
@@ -290,7 +294,7 @@ function VPSPerformance() {
                       </>
                     ) : (
                       <>
-                        <td className="px-4 py-3 text-center text-gray-500" colSpan="7">無數據</td>
+                        <td className="px-4 py-3 text-center text-gray-500" colSpan="8">無數據</td>
                       </>
                     )}
                   </tr>
