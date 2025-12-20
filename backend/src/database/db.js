@@ -1004,7 +1004,7 @@ class DatabaseManager {
             FROM vps_alert_history 
             WHERE vps_name = ? 
             AND alert_level = 'critical'
-            AND created_at >= datetime('now', '-' || ? || ' hours')
+            AND timestamp >= datetime('now', '-' || ? || ' hours')
         `);
         const result = stmt.get(vpsName, hours);
         const criticalCount = result.critical_count || 0;
