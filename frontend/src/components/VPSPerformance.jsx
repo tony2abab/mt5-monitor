@@ -4,7 +4,7 @@ import ErrorAlert from './ErrorAlert'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
-function VPSPerformance() {
+function VPSPerformance({ setCurrentPage }) {
   const [vpsList, setVpsList] = useState([])
   const [thresholds, setThresholds] = useState([])
   const [loading, setLoading] = useState(true)
@@ -192,6 +192,27 @@ function VPSPerformance() {
 
   return (
     <div className="space-y-6">
+      {/* 導航按鈕 */}
+      <div className="flex gap-3 mb-4">
+        <button
+          onClick={() => setCurrentPage('monitor')}
+          className="px-6 py-2 text-gray-400 hover:text-gray-200 rounded transition-all"
+        >
+          即時監控
+        </button>
+        <button
+          onClick={() => setCurrentPage('history')}
+          className="px-6 py-2 text-gray-400 hover:text-gray-200 rounded transition-all"
+        >
+          歷史數據
+        </button>
+        <button
+          className="px-6 py-2 bg-cyber-blue/20 text-cyber-blue font-semibold rounded transition-all"
+        >
+          VPS效能
+        </button>
+      </div>
+
       {/* 標題和控制 */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-white">VPS 效能監控</h2>

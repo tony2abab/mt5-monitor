@@ -1,3 +1,8 @@
+//cd C:\VPS_Monitor; .\vps-monitor-agent.ps1
+
+
+
+
 # ========== 創建 VPS 效能監測排程任務 ==========
 
 Write-Host "`n開始創建排程任務..." -ForegroundColor Cyan

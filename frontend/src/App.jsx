@@ -774,7 +774,7 @@ function App() {
 
           {/* VPS Performance Page Content */}
           {currentPage === 'vps' && (
-            <VPSPerformance />
+            <VPSPerformance setCurrentPage={setCurrentPage} />
           )}
 
           {/* Monitor Page Content */}
