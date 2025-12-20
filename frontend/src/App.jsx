@@ -674,7 +674,7 @@ function App() {
                     {' | '}
                     下次快照: {snapshotInfo.nextSnapshot.hk}
                     {nextAutoPollTime && (
-                      <> | 下次自動輪詢: {nextAutoPollTime.toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit' })}</>
+                      <> | 下次自動輪詢: HK {nextAutoPollTime.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(',', '')}</>
                     )}
                   </span>
                 </div>
