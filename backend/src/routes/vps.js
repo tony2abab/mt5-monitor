@@ -147,7 +147,7 @@ router.post('/metrics', authMiddleware, async (req, res) => {
                 alert_level: 'warning',
                 metric_value: uptimeStats.uptimeRate,
                 threshold_value: 90,
-                description: `過去24小時收到 ${uptimeStats.receivedCount}/${uptimeStats.expectedCount} 次數據上報`
+                description: `過去24小時發生 ${uptimeStats.criticalCount} 次嚴重告警（共 ${uptimeStats.expectedCount} 次檢測）`
             };
             alerts.push(uptimeAlert);
         }

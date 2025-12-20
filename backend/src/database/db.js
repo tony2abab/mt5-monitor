@@ -996,25 +996,30 @@ class DatabaseManager {
         return stmt.run(days);
     }
 
-    // 计算 VPS 过去24小时的正常率（基于每5分钟应上报一次）
+    // 计算 VPS 过去24小时的正常率（从100%开始，每次严重告警扣减）
     getVPSUptimeRate(vpsName, hours = 24) {
+        // 统计过去24小时的严重告警次数
         const stmt = this.db.prepare(`
-            SELECT COUNT(*) as received_count
-            FROM vps_metrics 
+            SELECT COUNT(*) as critical_count
+            FROM vps_alert_history 
             WHERE vps_name = ? 
-            AND timestamp >= datetime('now', '-' || ? || ' hours')
+            AND alert_level = 'critical'
+            AND created_at >= datetime('now', '-' || ? || ' hours')
         `);
         const result = stmt.get(vpsName, hours);
-        const receivedCount = result.received_count || 0;
+        const criticalCount = result.critical_count || 0;
         
         // 每5分钟应上报一次，24小时 = 288次
         const expectedCount = (hours * 60) / 5;
-        const uptimeRate = expectedCount > 0 ? (receivedCount / expectedCount) * 100 : 0;
+        
+        // 从100%开始，每次严重告警扣减 1/288
+        const normalCount = expectedCount - criticalCount;
+        const uptimeRate = expectedCount > 0 ? (normalCount / expectedCount) * 100 : 100;
         
         return {
-            receivedCount,
+            criticalCount,
             expectedCount,
-            uptimeRate: Math.min(100, uptimeRate) // 最高100%
+            uptimeRate: Math.max(0, Math.min(100, uptimeRate)) // 0-100%
         };
     }
 
