@@ -5,9 +5,9 @@ const telegram = require('../services/telegram');
 const authMiddleware = require('../middleware/auth');
 const webAuthMiddleware = require('../middleware/webAuth');
 
-// VPS 監測告警抑制緩存（15分鐘內同一 VPS 同一指標只發送一次）
+// VPS 監測告警抑制緩存（24小時內同一 VPS 同一指標只發送一次）
 const alertSuppressionCache = new Map();
-const ALERT_SUPPRESSION_MINUTES = 15;
+const ALERT_SUPPRESSION_MINUTES = 1440; // 24小時 = 1440分鐘
 
 // 檢查是否應該抑制告警
 function shouldSuppressAlert(vpsName, metricName) {
