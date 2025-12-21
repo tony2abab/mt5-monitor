@@ -1075,21 +1075,29 @@ class DatabaseManager {
         };
     }
 
-    // 计算 VPS 过去24小时的正常率超（从100%开始，每次 cpu_queue_length_ultra 严重告警扣减）
+    // 计算 VPS 过去24小时的正常率超（从100%开始，每次 cpu_queue_length 超过 ultra 阈值时扣减）
     getVPSUptimeRateUltra(vpsName, hours = 24) {
-        // 统计过去24小时的 cpu_queue_length_ultra 严重告警次数
+        // 获取 cpu_queue_length_ultra 的严重阈值
+        const thresholdStmt = this.db.prepare(`
+            SELECT critical_threshold 
+            FROM vps_alert_thresholds 
+            WHERE metric_name = 'cpu_queue_length_ultra'
+        `);
+        const thresholdResult = thresholdStmt.get();
+        const ultraThreshold = thresholdResult ? thresholdResult.critical_threshold : 100;
+        
+        // 统计过去24小时 cpu_queue_length >= ultraThreshold 的次数
         const stmt = this.db.prepare(`
             SELECT COUNT(*) as critical_count
-            FROM vps_alert_history 
+            FROM vps_metrics 
             WHERE vps_name = ? 
-            AND metric_name = 'cpu_queue_length_ultra'
-            AND alert_level = 'critical'
+            AND cpu_queue_length >= ?
             AND timestamp >= datetime('now', '-' || ? || ' hours')
         `);
-        const result = stmt.get(vpsName, hours);
+        const result = stmt.get(vpsName, ultraThreshold, hours);
         const criticalCount = result.critical_count || 0;
         
-        // 每次严重告警扣减1%，从100开始
+        // 每次超过阈值扣减1%，从100开始
         const uptimeRate = 100 - criticalCount;
         
         return {
@@ -1108,13 +1116,25 @@ class DatabaseManager {
         return stmt.run(vpsName);
     }
 
-    // 重置 VPS 的平均正常率超（清除 cpu_queue_length_ultra 历史严重告警记录）
+    // 重置 VPS 的平均正常率超（删除过去24小时超过ultra阈值的metrics记录）
     resetVPSUptimeRateUltra(vpsName) {
-        const stmt = this.db.prepare(`
-            DELETE FROM vps_alert_history 
-            WHERE vps_name = ? AND metric_name = 'cpu_queue_length_ultra' AND alert_level = 'critical'
+        // 获取 cpu_queue_length_ultra 的严重阈值
+        const thresholdStmt = this.db.prepare(`
+            SELECT critical_threshold 
+            FROM vps_alert_thresholds 
+            WHERE metric_name = 'cpu_queue_length_ultra'
         `);
-        return stmt.run(vpsName);
+        const thresholdResult = thresholdStmt.get();
+        const ultraThreshold = thresholdResult ? thresholdResult.critical_threshold : 100;
+        
+        // 删除过去24小时 cpu_queue_length >= ultraThreshold 的记录
+        const stmt = this.db.prepare(`
+            DELETE FROM vps_metrics 
+            WHERE vps_name = ? 
+            AND cpu_queue_length >= ?
+            AND timestamp >= datetime('now', '-24 hours')
+        `);
+        return stmt.run(vpsName, ultraThreshold);
     }
 
     // VPS Alert Thresholds operations

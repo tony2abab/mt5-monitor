@@ -412,20 +412,18 @@ function VPSPerformance({ setCurrentPage }) {
           <table className="w-full">
             <thead className="bg-cyber-blue/10 border-b border-cyber-blue/20">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">VPS 名稱</th>
+                <th className="px-2 py-3 text-left text-sm font-semibold text-gray-300" style={{width: '10%'}}>VPS 名稱</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">狀態</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">平均正常%</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">平均正常%超</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">CPU 隊列 (1)</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">CPU 隊列超 (2)</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">上下文切換 (3)</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">磁碟隊列 (4)</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">讀延遲 (5)</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">寫延遲 (6)</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">CPU % (7)</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">記憶體 % (8)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">上下文切換 (2)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">磁碟隊列 (3)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">讀延遲 (4)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">寫延遲 (5)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">CPU % (6)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">記憶體 % (7)</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">最後更新</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -439,7 +437,7 @@ function VPSPerformance({ setCurrentPage }) {
                     className="border-b border-cyber-blue/10 hover:bg-cyber-blue/5 cursor-pointer transition-colors"
                     onClick={() => toggleExpand(vps.vps_name)}
                   >
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-3" style={{width: '10%'}}>
                       <div className="flex items-center gap-2">
                         <span className="text-white font-medium">{vps.vps_name}</span>
                         {vps.vps_ip && (
@@ -498,9 +496,6 @@ function VPSPerformance({ setCurrentPage }) {
                         <td className={`px-4 py-3 text-center ${getValueClass(metrics.cpu_queue_length, 'cpu_queue_length')}`}>
                           {formatValue(metrics.cpu_queue_length, 'cpu_queue_length')}
                         </td>
-                        <td className={`px-4 py-3 text-center ${getValueClass(metrics.cpu_queue_length_ultra, 'cpu_queue_length_ultra')}`}>
-                          {formatValue(metrics.cpu_queue_length_ultra, 'cpu_queue_length_ultra')}
-                        </td>
                         <td className={`px-4 py-3 text-center ${getValueClass(metrics.context_switches_per_sec, 'context_switches_per_sec')}`}>
                           {formatValue(metrics.context_switches_per_sec, 'context_switches_per_sec')}
                         </td>
@@ -522,26 +517,10 @@ function VPSPerformance({ setCurrentPage }) {
                         <td className="px-4 py-3 text-center text-sm text-gray-400">
                           {vps.minutesSinceLastSeen < 1 ? '剛剛' : `${vps.minutesSinceLastSeen}分鐘前`}
                         </td>
-                        <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => setDeleteConfirm(vps.vps_name)}
-                            className="px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/50 rounded hover:bg-red-500/30 transition-all text-sm"
-                          >
-                            🗑️ 刪除
-                          </button>
-                        </td>
                       </>
                     ) : (
                       <>
-                        <td className="px-4 py-3 text-center text-gray-500" colSpan="11">無數據</td>
-                        <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => setDeleteConfirm(vps.vps_name)}
-                            className="px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/50 rounded hover:bg-red-500/30 transition-all text-sm"
-                          >
-                            🗑️ 刪除
-                          </button>
-                        </td>
+                        <td className="px-4 py-3 text-center text-gray-500" colSpan="10">無數據</td>
                       </>
                     )}
                   </tr>
