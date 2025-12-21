@@ -91,6 +91,24 @@ ${alert.description}
         return;
     }
     
+    // 平均正常率超告警的特殊處理
+    if (alert.metric_name === 'uptime_rate_ultra') {
+        const message = `⚠️ VPS 平均正常率超告警
+
+VPS: ${alert.vps_name}
+指標: 平均正常率超
+當前值: ${alert.metric_value.toFixed(1)}%
+閾值: ${alert.threshold_value}% (警告)
+時間: ${new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}
+
+${alert.description}
+
+建議檢查該 VPS 的 CPU 隊列是否頻繁超過高閾值。`;
+        
+        await telegram.sendMessage(message);
+        return;
+    }
+    
     const metricNames = {
         'cpu_queue_length': 'CPU 隊列長度',
         'cpu_queue_length_ultra': 'CPU 隊列超',
@@ -153,10 +171,27 @@ router.post('/metrics', authMiddleware, async (req, res) => {
             alerts.push(uptimeAlert);
         }
         
+        // 檢查平均正常率超（過去24小時）
+        const notificationConfig = db.getVPSNotificationConfig();
+        if (notificationConfig && notificationConfig.telegram_enabled === 1) {
+            const uptimeStatsUltra = db.getVPSUptimeRateUltra(vps_name, 24);
+            if (uptimeStatsUltra.uptimeRate < notificationConfig.uptime_rate_ultra_threshold) {
+                const uptimeUltraAlert = {
+                    vps_name,
+                    metric_name: 'uptime_rate_ultra',
+                    alert_level: 'warning',
+                    metric_value: uptimeStatsUltra.uptimeRate,
+                    threshold_value: notificationConfig.uptime_rate_ultra_threshold,
+                    description: `過去24小時 CPU 隊列超過 ${db.getVPSThreshold('cpu_queue_length_ultra').critical_threshold} 次數：${uptimeStatsUltra.criticalCount}`
+                };
+                alerts.push(uptimeUltraAlert);
+            }
+        }
+        
         // 處理告警
         for (const alert of alerts) {
             // 儲存告警歷史（正常率告警不存入資料庫）
-            if (alert.metric_name !== 'uptime_rate') {
+            if (alert.metric_name !== 'uptime_rate' && alert.metric_name !== 'uptime_rate_ultra') {
                 db.insertVPSAlert(alert);
             }
             
@@ -430,6 +465,56 @@ router.post('/reset-uptime-ultra/:vpsName', webAuthMiddleware, (req, res) => {
         res.json({ ok: true, message: 'VPS uptime rate ultra reset to 100%' });
     } catch (error) {
         console.error('Error in POST /api/vps/reset-uptime-ultra/:vpsName:', error);
+        res.status(500).json({ ok: false, error: 'Internal server error' });
+    }
+});
+
+// GET /api/vps/notification-config - 獲取 VPS 通知配置（需要登入，僅管理員）
+router.get('/notification-config', webAuthMiddleware, (req, res) => {
+    try {
+        // 檢查是否為管理員（用戶 A）
+        if (req.user && req.user.username !== 'A') {
+            return res.status(403).json({ ok: false, error: 'Access denied. Admin only.' });
+        }
+        
+        const config = db.getVPSNotificationConfig();
+        
+        res.json({ 
+            ok: true, 
+            config: {
+                telegramEnabled: config.telegram_enabled === 1,
+                uptimeRateUltraThreshold: config.uptime_rate_ultra_threshold
+            }
+        });
+    } catch (error) {
+        console.error('Error in GET /api/vps/notification-config:', error);
+        res.status(500).json({ ok: false, error: 'Internal server error' });
+    }
+});
+
+// PUT /api/vps/notification-config - 更新 VPS 通知配置（需要登入，僅管理員）
+router.put('/notification-config', webAuthMiddleware, (req, res) => {
+    try {
+        // 檢查是否為管理員（用戶 A）
+        if (req.user && req.user.username !== 'A') {
+            return res.status(403).json({ ok: false, error: 'Access denied. Admin only.' });
+        }
+        
+        const { telegramEnabled, uptimeRateUltraThreshold } = req.body;
+        
+        if (typeof telegramEnabled !== 'boolean') {
+            return res.status(400).json({ ok: false, error: 'telegramEnabled must be a boolean' });
+        }
+        
+        if (typeof uptimeRateUltraThreshold !== 'number' || uptimeRateUltraThreshold < 0 || uptimeRateUltraThreshold > 100) {
+            return res.status(400).json({ ok: false, error: 'uptimeRateUltraThreshold must be between 0 and 100' });
+        }
+        
+        db.updateVPSNotificationConfig(telegramEnabled, uptimeRateUltraThreshold);
+        
+        res.json({ ok: true, message: 'Notification config updated' });
+    } catch (error) {
+        console.error('Error in PUT /api/vps/notification-config:', error);
         res.status(500).json({ ok: false, error: 'Internal server error' });
     }
 });

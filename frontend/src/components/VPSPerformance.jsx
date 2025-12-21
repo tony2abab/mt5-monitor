@@ -26,6 +26,63 @@ function VPSPerformance({ setCurrentPage }) {
     const saved = localStorage.getItem('vps_cpu_queue_ultra_critical')
     return saved ? parseFloat(saved) : 100
   })
+  const [notificationConfig, setNotificationConfig] = useState({
+    telegramEnabled: false,
+    uptimeRateUltraThreshold: 70
+  })
+  const [editingNotificationThreshold, setEditingNotificationThreshold] = useState(false)
+
+  // 獲取通知配置
+  const fetchNotificationConfig = async () => {
+    try {
+      const token = localStorage.getItem('sessionToken')
+      const response = await fetch(`${API_BASE}/vps/notification-config`, {
+        headers: token ? { 'X-Session-Token': token } : {}
+      })
+      
+      if (!response.ok) throw new Error('Failed to fetch notification config')
+      
+      const data = await response.json()
+      if (data.ok) {
+        setNotificationConfig(data.config)
+      }
+    } catch (err) {
+      console.error('Fetch notification config error:', err)
+    }
+  }
+
+  // 更新通知配置
+  const updateNotificationConfig = async (telegramEnabled, uptimeRateUltraThreshold) => {
+    try {
+      const token = localStorage.getItem('sessionToken')
+      const response = await fetch(`${API_BASE}/vps/notification-config`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'X-Session-Token': token } : {})
+        },
+        body: JSON.stringify({
+          telegramEnabled,
+          uptimeRateUltraThreshold
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to update notification config')
+      }
+      
+      const data = await response.json()
+      if (data.ok) {
+        setNotificationConfig({ telegramEnabled, uptimeRateUltraThreshold })
+        setEditingNotificationThreshold(false)
+      } else {
+        throw new Error(data.error || 'Unknown error')
+      }
+    } catch (err) {
+      console.error('Update notification config error:', err)
+      setError(err.message)
+    }
+  }
 
   // 刪除 VPS
   const deleteVPS = async (vpsName) => {
@@ -229,6 +286,7 @@ function VPSPerformance({ setCurrentPage }) {
 
   useEffect(() => {
     fetchVPSList()
+    fetchNotificationConfig()
     
     let interval
     if (autoRefresh) {
@@ -634,6 +692,83 @@ function VPSPerformance({ setCurrentPage }) {
           </div>
         </div>
       )}
+
+      {/* Telegram 通知配置 */}
+      <div className="bg-cyber-darker border border-cyber-blue/20 rounded-lg p-4 mb-4">
+        <h3 className="text-lg font-semibold text-white mb-3">Telegram 通知配置</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Telegram 總開關 */}
+          <div className="bg-cyber-dark/50 rounded p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <div className="text-sm font-medium text-gray-300">Telegram 通知總開關</div>
+                <div className="text-xs text-gray-500 mt-1">控制是否發送 VPS 告警通知到 Telegram</div>
+              </div>
+              <button
+                onClick={() => updateNotificationConfig(!notificationConfig.telegramEnabled, notificationConfig.uptimeRateUltraThreshold)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  notificationConfig.telegramEnabled ? 'bg-green-500' : 'bg-gray-600'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    notificationConfig.telegramEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+            <div className="text-xs text-gray-400">
+              當前狀態: {notificationConfig.telegramEnabled ? 
+                <span className="text-green-400 font-semibold">已開啟</span> : 
+                <span className="text-gray-500">已關閉</span>
+              }
+            </div>
+          </div>
+
+          {/* 平均正常%超閾值 */}
+          <div className="bg-cyber-dark/50 rounded p-4">
+            <div className="text-sm font-medium text-gray-300 mb-2">平均正常%超告警閾值</div>
+            <div className="text-xs text-gray-500 mb-3">當 VPS 的平均正常%超低於此值時發送告警</div>
+            <div className="flex items-center gap-3">
+              <span className="text-yellow-400 text-xs">⚠️ 閾值:</span>
+              {editingNotificationThreshold ? (
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  defaultValue={notificationConfig.uptimeRateUltraThreshold}
+                  onBlur={(e) => {
+                    const newValue = parseFloat(e.target.value)
+                    if (newValue >= 0 && newValue <= 100) {
+                      updateNotificationConfig(notificationConfig.telegramEnabled, newValue)
+                    } else {
+                      setEditingNotificationThreshold(false)
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.target.blur()
+                    } else if (e.key === 'Escape') {
+                      setEditingNotificationThreshold(false)
+                    }
+                  }}
+                  autoFocus
+                  className="w-20 px-2 py-1 bg-cyber-darker border border-cyber-blue/50 rounded text-gray-300 text-sm focus:outline-none focus:border-cyber-blue"
+                />
+              ) : (
+                <span 
+                  className="text-gray-300 text-sm cursor-pointer hover:text-cyber-blue"
+                  onClick={() => setEditingNotificationThreshold(true)}
+                  title="點擊修改"
+                >
+                  {notificationConfig.uptimeRateUltraThreshold}% ✏️
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* 閾值配置說明 */}
       <div className="bg-cyber-darker border border-cyber-blue/20 rounded-lg p-4">

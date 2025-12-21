@@ -1169,6 +1169,21 @@ class DatabaseManager {
         return stmt.run(vps_name, metric_name, alert_level, metric_value, threshold_value);
     }
 
+    // VPS Notification Config operations
+    getVPSNotificationConfig() {
+        const stmt = this.db.prepare('SELECT * FROM vps_notification_config WHERE id = 1');
+        return stmt.get();
+    }
+
+    updateVPSNotificationConfig(telegramEnabled, uptimeRateUltraThreshold) {
+        const stmt = this.db.prepare(`
+            UPDATE vps_notification_config 
+            SET telegram_enabled = ?, uptime_rate_ultra_threshold = ?, updated_at = datetime('now')
+            WHERE id = 1
+        `);
+        return stmt.run(telegramEnabled ? 1 : 0, uptimeRateUltraThreshold);
+    }
+
     getRecentVPSAlerts(vpsName = null, hours = 24) {
         if (vpsName) {
             const stmt = this.db.prepare(`

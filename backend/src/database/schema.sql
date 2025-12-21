@@ -197,3 +197,15 @@ CREATE INDEX IF NOT EXISTS idx_vps_metrics_vps_timestamp ON vps_metrics(vps_name
 CREATE INDEX IF NOT EXISTS idx_vps_metrics_timestamp ON vps_metrics(timestamp);
 CREATE INDEX IF NOT EXISTS idx_vps_alert_history_vps ON vps_alert_history(vps_name);
 CREATE INDEX IF NOT EXISTS idx_vps_alert_history_timestamp ON vps_alert_history(timestamp);
+
+-- VPS Telegram 通知配置表
+CREATE TABLE IF NOT EXISTS vps_notification_config (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_enabled INTEGER DEFAULT 0,  -- Telegram 通知總開關 (0=關閉, 1=開啟)
+    uptime_rate_ultra_threshold REAL DEFAULT 70.0,  -- 平均正常%超告警閾值 (默認70%)
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- 插入默認配置
+INSERT OR IGNORE INTO vps_notification_config (id, telegram_enabled, uptime_rate_ultra_threshold)
+VALUES (1, 0, 70.0);
