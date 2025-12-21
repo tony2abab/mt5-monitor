@@ -14,11 +14,17 @@ function VPSPerformance({ setCurrentPage }) {
   const [historyData, setHistoryData] = useState({})
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [resetConfirm, setResetConfirm] = useState(null)
+  const [resetConfirmUltra, setResetConfirmUltra] = useState(null)
   const [editingThreshold, setEditingThreshold] = useState(null)
   const [cpuQueueCritical, setCpuQueueCritical] = useState(() => {
     // 从 localStorage 读取用户设置，默认 20
     const saved = localStorage.getItem('vps_cpu_queue_critical')
     return saved ? parseFloat(saved) : 20
+  })
+  const [cpuQueueUltraCritical, setCpuQueueUltraCritical] = useState(() => {
+    // 从 localStorage 读取用户设置，默认 100
+    const saved = localStorage.getItem('vps_cpu_queue_ultra_critical')
+    return saved ? parseFloat(saved) : 100
   })
 
   // 刪除 VPS
@@ -79,6 +85,68 @@ function VPSPerformance({ setCurrentPage }) {
       }
     } catch (err) {
       console.error('Update threshold error:', err)
+      setError(err.message)
+    }
+  }
+
+  // 更新 CPU 队列超严重阈值
+  const updateCpuQueueUltraThreshold = async (newValue) => {
+    try {
+      const token = localStorage.getItem('sessionToken')
+      const response = await fetch(`${API_BASE}/vps/thresholds`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'X-Session-Token': token } : {})
+        },
+        body: JSON.stringify({
+          metric_name: 'cpu_queue_length_ultra',
+          warning_threshold: 999999.0,
+          critical_threshold: newValue
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to update threshold')
+      }
+      
+      const data = await response.json()
+      if (data.ok) {
+        setCpuQueueUltraCritical(newValue)
+        localStorage.setItem('vps_cpu_queue_ultra_critical', newValue.toString())
+        setEditingThreshold(null)
+        fetchVPSList() // 重新载入列表
+      } else {
+        throw new Error(data.error || 'Unknown error')
+      }
+    } catch (err) {
+      console.error('Update threshold ultra error:', err)
+      setError(err.message)
+    }
+  }
+
+  // 重置 VPS 平均正常率超
+  const resetUptimeRateUltra = async (vpsName) => {
+    try {
+      const token = localStorage.getItem('sessionToken')
+      const response = await fetch(`${API_BASE}/vps/reset-uptime-ultra/${encodeURIComponent(vpsName)}`, {
+        method: 'POST',
+        headers: token ? { 'X-Session-Token': token } : {}
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to reset uptime rate ultra')
+      }
+      
+      const data = await response.json()
+      if (data.ok) {
+        setResetConfirmUltra(null)
+        fetchVPSList() // 重新載入列表
+      } else {
+        throw new Error(data.error || 'Unknown error')
+      }
+    } catch (err) {
+      console.error('Reset uptime rate ultra error:', err)
       setError(err.message)
     }
   }
@@ -233,6 +301,7 @@ function VPSPerformance({ setCurrentPage }) {
   // 指標中文名稱
   const metricNames = {
     'cpu_queue_length': 'CPU 隊列',
+    'cpu_queue_length_ultra': 'CPU 隊列超',
     'cpu_usage_percent': 'CPU 使用率',
     'context_switches_per_sec': '上下文切換',
     'disk_queue_length': '磁碟隊列',
@@ -346,13 +415,15 @@ function VPSPerformance({ setCurrentPage }) {
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">VPS 名稱</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">狀態</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">平均正常%</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">平均正常%超</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">CPU 隊列 (1)</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">上下文切換 (2)</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">磁碟隊列 (3)</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">讀延遲 (4)</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">寫延遲 (5)</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">CPU % (6)</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">記憶體 % (7)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">CPU 隊列超 (2)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">上下文切換 (3)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">磁碟隊列 (4)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">讀延遲 (5)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">寫延遲 (6)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">CPU % (7)</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">記憶體 % (8)</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">最後更新</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">操作</th>
               </tr>
@@ -403,10 +474,32 @@ function VPSPerformance({ setCurrentPage }) {
                         )}
                       </div>
                     </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <span className={`font-semibold ${vps.uptimeRateUltra < 90 ? 'bg-red-500/30 text-red-300 px-2 py-1 rounded' : 'text-green-400'}`}>
+                          {vps.uptimeRateUltra !== undefined ? `${vps.uptimeRateUltra.toFixed(1)}%` : '-'}
+                        </span>
+                        {vps.uptimeRateUltra !== undefined && vps.uptimeRateUltra < 100 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setResetConfirmUltra(vps.vps_name)
+                            }}
+                            className="px-2 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/50 rounded hover:bg-blue-500/30 transition-all text-xs"
+                            title="重置平均正常率超到100%"
+                          >
+                            🔄
+                          </button>
+                        )}
+                      </div>
+                    </td>
                     {metrics ? (
                       <>
                         <td className={`px-4 py-3 text-center ${getValueClass(metrics.cpu_queue_length, 'cpu_queue_length')}`}>
                           {formatValue(metrics.cpu_queue_length, 'cpu_queue_length')}
+                        </td>
+                        <td className={`px-4 py-3 text-center ${getValueClass(metrics.cpu_queue_length_ultra, 'cpu_queue_length_ultra')}`}>
+                          {formatValue(metrics.cpu_queue_length_ultra, 'cpu_queue_length_ultra')}
                         </td>
                         <td className={`px-4 py-3 text-center ${getValueClass(metrics.context_switches_per_sec, 'context_switches_per_sec')}`}>
                           {formatValue(metrics.context_switches_per_sec, 'context_switches_per_sec')}
@@ -440,7 +533,7 @@ function VPSPerformance({ setCurrentPage }) {
                       </>
                     ) : (
                       <>
-                        <td className="px-4 py-3 text-center text-gray-500" colSpan="9">無數據</td>
+                        <td className="px-4 py-3 text-center text-gray-500" colSpan="11">無數據</td>
                         <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => setDeleteConfirm(vps.vps_name)}
@@ -517,12 +610,42 @@ function VPSPerformance({ setCurrentPage }) {
         </div>
       )}
 
+      {/* 重置平均正常率超確認對話框 */}
+      {resetConfirmUltra && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-cyber-darker border border-purple-500/50 rounded-lg p-6 max-w-md mx-4">
+            <h3 className="text-xl font-bold text-purple-400 mb-4">🔄 確認重置超級監控</h3>
+            <p className="text-gray-300 mb-2">
+              確定要重置 VPS <span className="font-bold text-white">{resetConfirmUltra}</span> 的平均正常率超嗎？
+            </p>
+            <p className="text-sm text-gray-500 mb-6">
+              此操作將清除該 VPS 的所有 CPU 隊列超严重告警記錄，平均正常率超將重置為 100%。
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setResetConfirmUltra(null)}
+                className="px-4 py-2 bg-gray-700/50 text-gray-300 border border-gray-600/50 rounded hover:bg-gray-700 transition-all"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => resetUptimeRateUltra(resetConfirmUltra)}
+                className="px-4 py-2 bg-purple-500/20 text-purple-400 border border-purple-500/50 rounded hover:bg-purple-500/30 transition-all"
+              >
+                確定重置
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 閾值配置說明 */}
       <div className="bg-cyber-darker border border-cyber-blue/20 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-white mb-3">告警閾值配置</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {thresholds.map((threshold) => {
             const isCpuQueue = threshold.metric_name === 'cpu_queue_length'
+            const isCpuQueueUltra = threshold.metric_name === 'cpu_queue_length_ultra'
             const isEditing = editingThreshold === threshold.metric_name
             
             return (
@@ -532,23 +655,29 @@ function VPSPerformance({ setCurrentPage }) {
                 </div>
                 <div className="text-xs text-gray-500 mb-2">{threshold.description}</div>
                 <div className="flex gap-4 text-xs items-center">
-                  <div>
-                    <span className="text-yellow-400">⚠️ 警告: </span>
-                    <span className="text-gray-300">{isCpuQueue ? 5.0 : threshold.warning_threshold}</span>
-                  </div>
+                  {!isCpuQueueUltra && (
+                    <div>
+                      <span className="text-yellow-400">⚠️ 警告: </span>
+                      <span className="text-gray-300">{isCpuQueue ? 5.0 : threshold.warning_threshold}</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <span className="text-red-400">🔴 严重: </span>
-                    {isCpuQueue && isEditing ? (
+                    {(isCpuQueue || isCpuQueueUltra) && isEditing ? (
                       <input
                         type="number"
                         min="1"
-                        max="100"
+                        max="1000"
                         step="1"
-                        defaultValue={cpuQueueCritical}
+                        defaultValue={isCpuQueue ? cpuQueueCritical : cpuQueueUltraCritical}
                         onBlur={(e) => {
                           const newValue = parseFloat(e.target.value)
-                          if (newValue >= 1 && newValue <= 100) {
-                            updateCpuQueueThreshold(newValue)
+                          if (newValue >= 1 && newValue <= 1000) {
+                            if (isCpuQueue) {
+                              updateCpuQueueThreshold(newValue)
+                            } else {
+                              updateCpuQueueUltraThreshold(newValue)
+                            }
                           } else {
                             setEditingThreshold(null)
                           }
@@ -561,16 +690,16 @@ function VPSPerformance({ setCurrentPage }) {
                           }
                         }}
                         autoFocus
-                        className="w-16 px-2 py-1 bg-cyber-darker border border-cyber-blue/50 rounded text-gray-300 text-xs focus:outline-none focus:border-cyber-blue"
+                        className="w-20 px-2 py-1 bg-cyber-darker border border-cyber-blue/50 rounded text-gray-300 text-xs focus:outline-none focus:border-cyber-blue"
                       />
                     ) : (
                       <span 
-                        className={`text-gray-300 ${isCpuQueue ? 'cursor-pointer hover:text-cyber-blue' : ''}`}
-                        onClick={() => isCpuQueue && setEditingThreshold(threshold.metric_name)}
-                        title={isCpuQueue ? '点击修改' : ''}
+                        className={`text-gray-300 ${(isCpuQueue || isCpuQueueUltra) ? 'cursor-pointer hover:text-cyber-blue' : ''}`}
+                        onClick={() => (isCpuQueue || isCpuQueueUltra) && setEditingThreshold(threshold.metric_name)}
+                        title={(isCpuQueue || isCpuQueueUltra) ? '点击修改' : ''}
                       >
-                        {isCpuQueue ? cpuQueueCritical : threshold.critical_threshold}
-                        {isCpuQueue && ' ✏️'}
+                        {isCpuQueue ? cpuQueueCritical : (isCpuQueueUltra ? cpuQueueUltraCritical : threshold.critical_threshold)}
+                        {(isCpuQueue || isCpuQueueUltra) && ' ✏️'}
                       </span>
                     )}
                   </div>

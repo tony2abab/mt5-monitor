@@ -42,6 +42,9 @@ class DatabaseManager {
         // 資料庫遷移：更新 VPS 告警閾值
         this.migrateVPSThresholds();
         
+        // 資料庫遷移：為 vps_metrics 表添加 cpu_queue_length_ultra 欄位
+        this.migrateVPSMetrics();
+        
         console.log('Database initialized successfully');
     }
     
@@ -91,6 +94,22 @@ class DatabaseManager {
             }
         } catch (err) {
             console.error('Migration error for VPS thresholds:', err.message);
+        }
+    }
+    
+    // 資料庫遷移：為 vps_metrics 表添加 cpu_queue_length_ultra 欄位
+    migrateVPSMetrics() {
+        try {
+            // 檢查欄位是否存在
+            const tableInfo = this.db.prepare("PRAGMA table_info(vps_metrics)").all();
+            const columnExists = tableInfo.some(c => c.name === 'cpu_queue_length_ultra');
+            
+            if (!columnExists) {
+                this.db.exec('ALTER TABLE vps_metrics ADD COLUMN cpu_queue_length_ultra REAL DEFAULT 0');
+                console.log('Migration: Added cpu_queue_length_ultra column to vps_metrics table');
+            }
+        } catch (err) {
+            console.error('Migration error for VPS metrics:', err.message);
         }
     }
     
@@ -1056,11 +1075,44 @@ class DatabaseManager {
         };
     }
 
+    // 计算 VPS 过去24小时的正常率超（从100%开始，每次 cpu_queue_length_ultra 严重告警扣减）
+    getVPSUptimeRateUltra(vpsName, hours = 24) {
+        // 统计过去24小时的 cpu_queue_length_ultra 严重告警次数
+        const stmt = this.db.prepare(`
+            SELECT COUNT(*) as critical_count
+            FROM vps_alert_history 
+            WHERE vps_name = ? 
+            AND metric_name = 'cpu_queue_length_ultra'
+            AND alert_level = 'critical'
+            AND timestamp >= datetime('now', '-' || ? || ' hours')
+        `);
+        const result = stmt.get(vpsName, hours);
+        const criticalCount = result.critical_count || 0;
+        
+        // 每次严重告警扣减1%，从100开始
+        const uptimeRate = 100 - criticalCount;
+        
+        return {
+            criticalCount,
+            expectedCount: 100,  // 固定为100，方便理解
+            uptimeRate: Math.max(0, Math.min(100, uptimeRate)) // 0-100%
+        };
+    }
+
     // 重置 VPS 的平均正常率（清除历史严重告警记录）
     resetVPSUptimeRate(vpsName) {
         const stmt = this.db.prepare(`
             DELETE FROM vps_alert_history 
             WHERE vps_name = ? AND alert_level = 'critical'
+        `);
+        return stmt.run(vpsName);
+    }
+
+    // 重置 VPS 的平均正常率超（清除 cpu_queue_length_ultra 历史严重告警记录）
+    resetVPSUptimeRateUltra(vpsName) {
+        const stmt = this.db.prepare(`
+            DELETE FROM vps_alert_history 
+            WHERE vps_name = ? AND metric_name = 'cpu_queue_length_ultra' AND alert_level = 'critical'
         `);
         return stmt.run(vpsName);
     }

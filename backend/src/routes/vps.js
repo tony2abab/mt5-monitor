@@ -93,6 +93,7 @@ ${alert.description}
     
     const metricNames = {
         'cpu_queue_length': 'CPU 隊列長度',
+        'cpu_queue_length_ultra': 'CPU 隊列超',
         'cpu_usage_percent': 'CPU 使用率',
         'context_switches_per_sec': '上下文切換',
         'disk_queue_length': '磁碟隊列長度',
@@ -208,13 +209,15 @@ router.get('/list', webAuthMiddleware, (req, res) => {
             
             // 计算过去24小时的正常率
             const uptimeStats = db.getVPSUptimeRate(config.vps_name, 24);
+            const uptimeStatsUltra = db.getVPSUptimeRateUltra(config.vps_name, 24);
             
             if (!metrics) {
                 return {
                     ...config,
                     status: 'offline',
                     metrics: null,
-                    uptimeRate: uptimeStats.uptimeRate
+                    uptimeRate: uptimeStats.uptimeRate,
+                    uptimeRateUltra: uptimeStatsUltra.uptimeRate
                 };
             }
             
@@ -229,7 +232,8 @@ router.get('/list', webAuthMiddleware, (req, res) => {
                     status: 'offline',
                     metrics,
                     minutesSinceLastSeen: Math.floor(minutesSinceLastSeen),
-                    uptimeRate: uptimeStats.uptimeRate
+                    uptimeRate: uptimeStats.uptimeRate,
+                    uptimeRateUltra: uptimeStatsUltra.uptimeRate
                 };
             }
             
@@ -256,7 +260,8 @@ router.get('/list', webAuthMiddleware, (req, res) => {
                 metrics,
                 alerts,
                 minutesSinceLastSeen: Math.floor(minutesSinceLastSeen),
-                uptimeRate: uptimeStats.uptimeRate
+                uptimeRate: uptimeStats.uptimeRate,
+                uptimeRateUltra: uptimeStatsUltra.uptimeRate
             };
         });
         
@@ -406,6 +411,25 @@ router.post('/reset-uptime/:vpsName', webAuthMiddleware, (req, res) => {
         res.json({ ok: true, message: 'VPS uptime rate reset to 100%' });
     } catch (error) {
         console.error('Error in POST /api/vps/reset-uptime/:vpsName:', error);
+        res.status(500).json({ ok: false, error: 'Internal server error' });
+    }
+});
+
+// POST /api/vps/reset-uptime-ultra/:vpsName - 重置 VPS 平均正常率超（需要登入，僅管理員）
+router.post('/reset-uptime-ultra/:vpsName', webAuthMiddleware, (req, res) => {
+    try {
+        // 檢查是否為管理員（用戶 A）
+        if (req.user && req.user.username !== 'A') {
+            return res.status(403).json({ ok: false, error: 'Access denied. Admin only.' });
+        }
+        
+        const { vpsName } = req.params;
+        
+        db.resetVPSUptimeRateUltra(vpsName);
+        
+        res.json({ ok: true, message: 'VPS uptime rate ultra reset to 100%' });
+    } catch (error) {
+        console.error('Error in POST /api/vps/reset-uptime-ultra/:vpsName:', error);
         res.status(500).json({ ok: false, error: 'Internal server error' });
     }
 });

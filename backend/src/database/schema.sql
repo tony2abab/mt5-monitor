@@ -139,6 +139,7 @@ CREATE TABLE IF NOT EXISTS vps_metrics (
     vps_name TEXT NOT NULL,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     cpu_queue_length REAL DEFAULT 0,        -- 處理器隊列長度
+    cpu_queue_length_ultra REAL DEFAULT 0,  -- 處理器隊列長度(超級監控)
     cpu_usage_percent REAL DEFAULT 0,       -- CPU 使用率
     context_switches_per_sec REAL DEFAULT 0, -- 上下文切換/秒
     disk_queue_length REAL DEFAULT 0,       -- 磁碟隊列長度
@@ -176,6 +177,7 @@ CREATE TABLE IF NOT EXISTS vps_alert_history (
 -- Initialize default alert thresholds
 INSERT OR IGNORE INTO vps_alert_thresholds (metric_name, warning_threshold, critical_threshold, description) VALUES
     ('cpu_queue_length', 5.0, 20.0, 'CPU 隊列長度 - 超過表示 CPU 超賣'),
+    ('cpu_queue_length_ultra', 999999.0, 100.0, 'CPU 隊列超 - 超級監控閾值'),
     ('context_switches_per_sec', 50000.0, 100000.0, '上下文切換/秒 - 過高表示 CPU 超賣'),
     ('cpu_usage_percent', 80.0, 95.0, 'CPU 使用率'),
     ('disk_queue_length', 2.0, 5.0, '磁碟隊列長度 - 超過表示 I/O 瓶頸'),
