@@ -424,6 +424,7 @@ function VPSPerformance({ setCurrentPage }) {
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">CPU % (6)</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">記憶體 % (7)</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">最後更新</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -517,10 +518,26 @@ function VPSPerformance({ setCurrentPage }) {
                         <td className="px-4 py-3 text-center text-sm text-gray-400">
                           {vps.minutesSinceLastSeen < 1 ? '剛剛' : `${vps.minutesSinceLastSeen}分鐘前`}
                         </td>
+                        <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => setDeleteConfirm(vps.vps_name)}
+                            className="px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/50 rounded hover:bg-red-500/30 transition-all text-sm"
+                          >
+                            刪除
+                          </button>
+                        </td>
                       </>
                     ) : (
                       <>
                         <td className="px-4 py-3 text-center text-gray-500" colSpan="10">無數據</td>
+                        <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => setDeleteConfirm(vps.vps_name)}
+                            className="px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/50 rounded hover:bg-red-500/30 transition-all text-sm"
+                          >
+                            刪除
+                          </button>
+                        </td>
                       </>
                     )}
                   </tr>
