@@ -14,6 +14,12 @@ function VPSPerformance({ setCurrentPage }) {
   const [historyData, setHistoryData] = useState({})
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [resetConfirm, setResetConfirm] = useState(null)
+  const [editingThreshold, setEditingThreshold] = useState(null)
+  const [cpuQueueCritical, setCpuQueueCritical] = useState(() => {
+    // 从 localStorage 读取用户设置，默认 20
+    const saved = localStorage.getItem('vps_cpu_queue_critical')
+    return saved ? parseFloat(saved) : 20
+  })
 
   // 刪除 VPS
   const deleteVPS = async (vpsName) => {
@@ -37,6 +43,42 @@ function VPSPerformance({ setCurrentPage }) {
       }
     } catch (err) {
       console.error('Delete VPS error:', err)
+      setError(err.message)
+    }
+  }
+
+  // 更新 CPU 队列严重阈值
+  const updateCpuQueueThreshold = async (newValue) => {
+    try {
+      const token = localStorage.getItem('sessionToken')
+      const response = await fetch(`${API_BASE}/vps/thresholds`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'X-Session-Token': token } : {})
+        },
+        body: JSON.stringify({
+          metric_name: 'cpu_queue_length',
+          warning_threshold: 5.0,
+          critical_threshold: newValue
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to update threshold')
+      }
+      
+      const data = await response.json()
+      if (data.ok) {
+        setCpuQueueCritical(newValue)
+        localStorage.setItem('vps_cpu_queue_critical', newValue.toString())
+        setEditingThreshold(null)
+        fetchVPSList() // 重新载入列表
+      } else {
+        throw new Error(data.error || 'Unknown error')
+      }
+    } catch (err) {
+      console.error('Update threshold error:', err)
       setError(err.message)
     }
   }
@@ -479,24 +521,63 @@ function VPSPerformance({ setCurrentPage }) {
       <div className="bg-cyber-darker border border-cyber-blue/20 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-white mb-3">告警閾值配置</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {thresholds.map((threshold) => (
-            <div key={threshold.metric_name} className="bg-cyber-dark/50 rounded p-3">
-              <div className="text-sm font-medium text-gray-300 mb-1">
-                {metricNames[threshold.metric_name] || threshold.metric_name}
-              </div>
-              <div className="text-xs text-gray-500 mb-2">{threshold.description}</div>
-              <div className="flex gap-4 text-xs">
-                <div>
-                  <span className="text-yellow-400">⚠️ 警告: </span>
-                  <span className="text-gray-300">{threshold.warning_threshold}</span>
+          {thresholds.map((threshold) => {
+            const isCpuQueue = threshold.metric_name === 'cpu_queue_length'
+            const isEditing = editingThreshold === threshold.metric_name
+            
+            return (
+              <div key={threshold.metric_name} className="bg-cyber-dark/50 rounded p-3">
+                <div className="text-sm font-medium text-gray-300 mb-1">
+                  {metricNames[threshold.metric_name] || threshold.metric_name}
                 </div>
-                <div>
-                  <span className="text-red-400">🔴 嚴重: </span>
-                  <span className="text-gray-300">{threshold.critical_threshold}</span>
+                <div className="text-xs text-gray-500 mb-2">{threshold.description}</div>
+                <div className="flex gap-4 text-xs items-center">
+                  <div>
+                    <span className="text-yellow-400">⚠️ 警告: </span>
+                    <span className="text-gray-300">{isCpuQueue ? 5.0 : threshold.warning_threshold}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-red-400">🔴 严重: </span>
+                    {isCpuQueue && isEditing ? (
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        step="1"
+                        defaultValue={cpuQueueCritical}
+                        onBlur={(e) => {
+                          const newValue = parseFloat(e.target.value)
+                          if (newValue >= 1 && newValue <= 100) {
+                            updateCpuQueueThreshold(newValue)
+                          } else {
+                            setEditingThreshold(null)
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.target.blur()
+                          } else if (e.key === 'Escape') {
+                            setEditingThreshold(null)
+                          }
+                        }}
+                        autoFocus
+                        className="w-16 px-2 py-1 bg-cyber-darker border border-cyber-blue/50 rounded text-gray-300 text-xs focus:outline-none focus:border-cyber-blue"
+                      />
+                    ) : (
+                      <span 
+                        className={`text-gray-300 ${isCpuQueue ? 'cursor-pointer hover:text-cyber-blue' : ''}`}
+                        onClick={() => isCpuQueue && setEditingThreshold(threshold.metric_name)}
+                        title={isCpuQueue ? '点击修改' : ''}
+                      >
+                        {isCpuQueue ? cpuQueueCritical : threshold.critical_threshold}
+                        {isCpuQueue && ' ✏️'}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>

@@ -78,15 +78,16 @@ class DatabaseManager {
     // 資料庫遷移：更新 VPS 告警閾值
     migrateVPSThresholds() {
         try {
-            // 更新 CPU 隊列的嚴重閾值從 5.0 改為 10.0
+            // 更新 CPU 隊列的閾值：警告 5.0，嚴重 20.0
             const stmt = this.db.prepare(`
                 UPDATE vps_alert_thresholds 
-                SET critical_threshold = 10.0, updated_at = datetime('now')
-                WHERE metric_name = 'cpu_queue_length' AND critical_threshold = 5.0
+                SET warning_threshold = 5.0, critical_threshold = 20.0, updated_at = datetime('now')
+                WHERE metric_name = 'cpu_queue_length' 
+                AND (warning_threshold != 5.0 OR critical_threshold != 20.0)
             `);
             const result = stmt.run();
             if (result.changes > 0) {
-                console.log('Migration: Updated cpu_queue_length critical threshold from 5.0 to 10.0');
+                console.log('Migration: Updated cpu_queue_length thresholds to warning=5.0, critical=20.0');
             }
         } catch (err) {
             console.error('Migration error for VPS thresholds:', err.message);
